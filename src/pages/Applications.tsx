@@ -309,7 +309,7 @@ export function Applications() {
               anotar un recordatorio para revisarlo después.
             </p>
           )}
-          <JobReview application={selected} />
+          <JobReview key={selected.id} application={selected} />
           <div className="grid-2">
             <section className="card">
               <div className="card-body">

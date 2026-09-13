@@ -21,7 +21,9 @@ export function SearchJobs() {
   const patch = (v: Partial<typeof p>) =>
     apply((s) => ({ ...s, preferences: { ...s.preferences, ...v } }));
   const [role, setRole] = useState(p.role || state.profile.personal.headline);
-  const [country, setCountry] = useState(p.country || countryCode(state.profile.personal.country));
+  const [country, setCountry] = useState(
+    p.country || countryCode(state.profile.personal.country) || '*',
+  );
   const [city, setCity] = useState(p.country ? p.city : p.city || state.profile.personal.city);
   const [schedule, setSchedule] = useState(
     ['Jornada completa', 'Media jornada'].includes(p.schedule) ? p.schedule : '',
@@ -103,6 +105,7 @@ export function SearchJobs() {
           />
           <Select
             label="País donde quieres trabajar"
+            hint="España, Chile y otros países. Este destino no cambia los datos de tu CV."
             value={country}
             onChange={(e) => {
               setCountry(e.target.value);

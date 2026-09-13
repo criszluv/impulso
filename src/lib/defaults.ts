@@ -8,7 +8,7 @@ export const emptyProfile: Profile = {
     email: '',
     phone: '',
     city: '',
-    country: 'Chile',
+    country: '',
     linkedin: '',
     github: '',
     website: '',

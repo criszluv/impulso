@@ -178,6 +178,30 @@ export function CvBuilder() {
                 <DownloadCv />
                 <DownloadCv share />
                 <p className="field-hint">Se descarga un PDF. No necesitas una impresora.</p>
+                <details>
+                  <summary>Qué revisar antes de enviar</summary>
+                  <ul className="plain-steps">
+                    <li>
+                      Presenta primero tus experiencias más recientes. Puedes ordenarlas por fecha
+                      en la guía.
+                    </li>
+                    <li>
+                      Destaca tareas y estudios relacionados con el aviso. Usa ejemplos verdaderos y
+                      lenguaje claro.
+                    </li>
+                    <li>
+                      Revisa fechas, ortografía y datos de contacto. La foto sigue siendo opcional.
+                    </li>
+                  </ul>
+                  <a
+                    className="text-link"
+                    href="https://europass.europa.eu/es/create-europass-cv"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Orientaciones de Europass para preparar un CV
+                  </a>
+                </details>
               </div>
             </aside>
             <section className="preview-panel" aria-label="Vista previa del currículum">

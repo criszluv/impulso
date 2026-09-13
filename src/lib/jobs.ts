@@ -174,7 +174,14 @@ export const fold = (v: string) =>
     .toLowerCase()
     .trim();
 export function countryCode(name: string) {
-  return countries.find((c) => fold(c.name) === fold(name) || c.code === name)?.code || 'CL';
+  return (
+    countries.find(
+      (c) =>
+        fold(c.name) === fold(name) ||
+        c.aliases.includes(fold(name)) ||
+        c.code.toLowerCase() === fold(name),
+    )?.code || ''
+  );
 }
 const jobSchema = z.object({
   id: z.string(),

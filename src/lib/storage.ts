@@ -35,7 +35,7 @@ const schema = z.object({
       email: text,
       phone: text,
       city: text,
-      country: z.string().default('Chile'),
+      country: text,
       linkedin: text,
       github: text,
       website: text,

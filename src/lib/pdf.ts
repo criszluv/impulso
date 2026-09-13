@@ -102,7 +102,9 @@ export function buildCvPdf(profile: Profile, config: CvConfig): Blob {
       room(20);
       paragraph(e.degree, true);
       paragraph(
-        [e.institution, formatRange(e.startDate, e.endDate, e.current)].filter(Boolean).join(' · '),
+        [e.institution, e.location, formatRange(e.startDate, e.endDate, e.current, 'En curso')]
+          .filter(Boolean)
+          .join(' · '),
         false,
         9,
       );

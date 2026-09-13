@@ -62,7 +62,9 @@ function EducationSection({ profile }: { profile: Profile }) {
         <article className="cv-entry" key={e.id}>
           <div className="cv-entry-head">
             <strong>{e.degree || 'Título'}</strong>
-            <span className="when">{formatRange(e.startDate, e.endDate, e.current)}</span>
+            <span className="when">
+              {formatRange(e.startDate, e.endDate, e.current, 'En curso')}
+            </span>
           </div>
           <div className="where">{[e.institution, e.location].filter(Boolean).join(' · ')}</div>
           {e.detail && <div className="cv-tech">{e.detail}</div>}

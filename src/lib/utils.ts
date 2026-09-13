@@ -13,9 +13,14 @@ export function formatMonth(value: string): string {
   return `${MONTHS[monthIndex]} ${y}`;
 }
 
-export function formatRange(start: string, end: string, current: boolean): string {
+export function formatRange(
+  start: string,
+  end: string,
+  current: boolean,
+  currentLabel = 'Actualidad',
+): string {
   const from = formatMonth(start);
-  const to = current ? 'Actualidad' : formatMonth(end);
+  const to = current ? currentLabel : formatMonth(end);
   if (!from && !to) return '';
   if (!from) return to;
   if (!to) return from;

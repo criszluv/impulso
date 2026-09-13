@@ -18,9 +18,9 @@ Usa siempre el mismo origen y navegador. localhost y 127.0.0.1 tienen almacenami
 ## Un recorrido sencillo
 
 - **Inicio:** una próxima acción, acceso a los tres pasos y pendientes.
-- **Mi currículum:** guía de seis pasos, compatible con oficios, trabajos informales y primer empleo. Se acepta teléfono sin correo. Las cifras no son obligatorias.
+- **Mi currículum:** guía de seis pasos con país explícito, experiencias y estudios múltiples en cuadros plegables, fechas y estado actual/en curso. Sede y fechas aparecen en el PDF. Añadir, minimizar, quitar/deshacer y ordenar por fecha funciona sin salir de la guía. Sigue siendo compatible con oficios, trabajos informales y primer empleo; teléfono sin correo y cifras opcionales.
 - **Buscar trabajo:** selector de 25 países y ciudad libre con sugerencias. Ofertas remotas de Remotive y Jobicy dentro de la app, con descripción, fuente y guardado sin duplicados. La ciudad se usa en búsquedas externas de Google, LinkedIn, Indeed, InfoJobs (España) y Chiletrabajos (Chile). No hay servicio público/BNE.
-- **Mis postulaciones:** lista accesible, registro del aviso, pasos para enviar el currículum, confirmación explícita del envío, notas y recordatorios descargables para el calendario.
+- **Mis postulaciones:** comparación local del aviso con el CV, con fragmentos del aviso, evidencia de las secciones visibles y sugerencias. También conserva registro del aviso, pasos de envío, confirmación explícita, notas y recordatorios descargables.
 - **Ayuda y mis datos:** copias descargables, validación y revisión antes de restaurar, versión anterior y borrado local.
 - **IA y cartas visibles:** accesos permanentes a activar IA, leer un CV y crear cartas de presentación. Las cartas funcionan sin empleo guardado e incluyen tono y motivación. Una oferta integrada pasa su descripción directamente a la carta.
 - **Herramientas complementarias:** importación PDF/Word/texto/ZIP de LinkedIn, edición completa del perfil, borradores de LinkedIn y preparación de entrevistas.
@@ -34,6 +34,18 @@ Los datos se guardan en localStorage bajo la clave histórica impulso.state.v1. 
 Un error de cuota o almacenamiento se muestra al usuario; nunca se anuncia un guardado fallido como exitoso. Un estado corrupto se conserva para recuperarlo, en lugar de sobrescribirlo automáticamente. Antes de reemplazar el perfil se intenta crear una copia interna y se ofrece deshacer durante la sesión.
 
 En equipos compartidos, cualquiera que use ese mismo navegador puede acceder a los datos. La app explica cómo descargar una copia y borrar los datos al terminar.
+
+## Guía, país y comparación del aviso
+
+El país de residencia no se rellena con Chile para personas nuevas. Los perfiles y copias antiguos conservan el país que ya tuvieran; un país ausente queda vacío. España aparece tanto en la guía como en el buscador, con ciudades sugeridas e InfoJobs como búsqueda externa. La ubicación de residencia inicia la búsqueda cuando todavía no hay un destino independiente; explorar otro país no modifica el CV.
+
+Los cuadros de experiencia y estudios se pueden minimizar independientemente. El cuadro nuevo recibe el foco; si una fila cerrada tiene un error, se abre y enfoca el campo. Las fechas son opcionales y se rechaza un fin anterior al inicio. Una fila totalmente vacía se omite al continuar; las filas con información requieren cargo o título. Quitar datos existentes exige confirmación y ofrece deshacer mientras permanece ese paso abierto. Se conservan arrays y estructura históricos; sede/ciudad utiliza Education.location.
+
+La comparación de postulaciones reconoce 30 temas frecuentes en español e inglés. Es una lectura por reglas, sin IA ni envío externo. Los contadores representan temas reconocidos con información relacionada, sin información visible o por revisar; no son un porcentaje de compatibilidad, una evaluación ATS ni una probabilidad de contratación. Se muestran citas de ambas fuentes y sugerencias concretas. No aparecer en el CV no significa carecer de esa habilidad.
+
+La revisión respeta las opciones de visibilidad del CV. No utiliza el cargo deseado como experiencia ni deduce manejo de una herramienta porque una empresa lleve su nombre. Las afirmaciones negativas y los niveles, títulos, licencias y duración requieren revisión humana. Otros requisitos explícitos no reconocidos se muestran para revisión, y el aviso completo se puede editar desde esa misma sección. No hay interpretación semántica exhaustiva, equivalencias de estudios ni cálculo automático de años de experiencia.
+
+Las orientaciones de claridad, relevancia para el puesto y orden cronológico inverso se basan en [Europass: cómo hacer un buen CV](https://europass.europa.eu/es/create-europass-cv), consultado el 13 de septiembre de 2026. El orden por fecha es una acción explícita del usuario: no se altera en silencio el orden elegido en el editor. Impulso conserva sus plantillas propias; no presenta su PDF como un documento oficial Europass ni exige foto o documento de identidad.
 
 ## IA en tu equipo
 
@@ -90,7 +102,7 @@ npx playwright install chromium
 npm test
 ```
 
-Las 19 pruebas usan contextos aislados del navegador y datos ficticios, sin modificar el perfil del usuario. Cubren el recorrido inicial, PDF legible y multipágina, persistencia, errores de guardado, migración, importación, recuperación y deshacer, envío confirmado, calendario, cartas y entrevistas, navegación móvil y comprobaciones axe.
+Las 25 pruebas usan contextos aislados del navegador y datos ficticios, sin modificar el perfil del usuario. Cubren el recorrido inicial, PDF legible y multipágina, persistencia, errores de guardado, migración, importación, recuperación y deshacer, envío confirmado, calendario, cartas y entrevistas, navegación móvil y comprobaciones axe. Las seis pruebas añadidas cubren la guía completa en España con varias experiencias y estudios, PDF con sede y estado en curso, validación de filas cerradas, foco y deshacer, migración de países, separación entre residencia y búsqueda, evidencia de comparación, secciones ocultas y estados sin perfil/aviso.
 
 Los servicios de IA y empleo se simulan en las pruebas para hacerlas reproducibles y no consumir APIs. Se comprobó por separado la llegada real de ofertas de ambas fuentes; no había servidor de IA local activo durante esta revisión.
 

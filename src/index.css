@@ -2140,3 +2140,114 @@ details[open] > summary {
   margin: 0;
   min-width: 0;
 }
+
+.guided-record summary small {
+  display: block;
+  color: var(--muted);
+  font-weight: 400;
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+}
+.guided-record summary span {
+  overflow-wrap: anywhere;
+}
+.history-dates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.guided-education {
+  margin-top: 30px;
+  border-top: 1px solid var(--line);
+  padding-top: 24px;
+}
+.guided-record input {
+  min-width: 0;
+}
+@media (max-width: 650px) {
+  .history-dates {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .guided-record {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+.comparison-counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 24px 0 12px;
+}
+.comparison-counts > div {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+}
+.comparison-counts strong {
+  display: block;
+  font-size: 28px;
+  line-height: 1.2;
+  color: var(--accent);
+}
+.comparison-counts span {
+  display: block;
+  font-size: 14px;
+  margin-top: 7px;
+}
+.comparison-items {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 24px 0;
+}
+.comparison-item {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 22px;
+  overflow-wrap: anywhere;
+}
+.comparison-item h3 {
+  margin: 18px 0 14px;
+}
+.comparison-item .pill {
+  white-space: normal;
+  line-height: 1.5;
+}
+.comparison-item p:last-child {
+  margin-bottom: 0;
+}
+.comparison-evidence {
+  background: var(--bg-soft);
+  padding: 14px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+.comparison-evidence p {
+  margin: 8px 0 0;
+}
+.comparison-evidence small {
+  display: block;
+  color: var(--muted);
+}
+.comparison-logistics {
+  margin-top: 30px;
+}
+@media (max-width: 760px) {
+  .comparison-items {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .comparison-counts {
+    gap: 7px;
+  }
+  .comparison-counts > div {
+    padding: 12px 9px;
+  }
+  .comparison-counts span {
+    font-size: 13px;
+  }
+}

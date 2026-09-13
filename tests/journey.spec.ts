@@ -18,6 +18,7 @@ test('crear CV sin experiencia ni correo, PDF legible y persistencia', async ({ 
   await page.getByRole('link', { name: 'Empezar mi currículum', exact: true }).click();
   await page.getByRole('button', { name: 'Cocina', exact: true }).click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByLabel('País donde vives').selectOption('Chile');
   await page.getByLabel('Comuna o ciudad', { exact: true }).fill('Osorno');
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await page.getByLabel('Media jornada', { exact: true }).check();
@@ -166,6 +167,7 @@ test('importación de texto con revisión antes de guardar', async ({ page }) =>
 test('búsqueda externa utiliza las preferencias', async ({ page }) => {
   await page.goto('/#/buscar');
   await page.getByLabel('¿Qué trabajo buscas?').fill('Aseo');
+  await page.getByLabel('País donde quieres trabajar').selectOption('CL');
   await page.getByLabel('Ciudad (opcional)').fill('Osorno');
   await page.getByLabel('Horario', { exact: true }).selectOption('Media jornada');
   const href = await page

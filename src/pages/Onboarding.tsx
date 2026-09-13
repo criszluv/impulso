@@ -2,8 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Check, CircleHelp } from 'lucide-react';
 import { useApp } from '../state/context';
-import { TextInput, TextArea, Select, Button } from '../components/ui';
-import { uid } from '../lib/utils';
+import { TextInput, Select, Button } from '../components/ui';
+import { countries } from '../lib/jobs';
+import { GuidedExperience, GuidedEducation } from '../components/GuidedHistory';
+import { hasExperience, hasEducation, historyError, updateHomeLocation } from '../lib/guided';
+import type { GuidedError } from '../lib/guided';
 
 const roles = [
   'Atención al cliente',
@@ -56,7 +59,7 @@ const suggestions: Record<string, string[]> = {
 };
 const titles = [
   '¿En qué te gustaría trabajar?',
-  '¿Dónde buscas trabajo?',
+  '¿Dónde vives?',
   '¿Qué horarios te acomodan?',
   'Cuéntanos algo que hayas hecho.',
   '¿Qué sabes hacer?',
@@ -64,7 +67,7 @@ const titles = [
 ];
 const subtitles = [
   'Puedes elegir una idea o escribir otra. Siempre podrás cambiarla.',
-  'Puede ser tu comuna o una ciudad cercana.',
+  'Tu país y ciudad irán en el currículum. Después puedes buscar empleo en otro lugar.',
   'Elige lo que puedas compatibilizar con tu día a día.',
   'También cuentan trabajos por tu cuenta, cuidados y ayuda en un negocio familiar.',
   'Marca solo lo que sabes hacer. No necesitas certificados para comenzar.',
@@ -77,7 +80,8 @@ export function Onboarding() {
     step = pref.step;
   const [error, setError] = useState(''),
     [help, setHelp] = useState(false),
-    [skill, setSkill] = useState('');
+    [skill, setSkill] = useState(''),
+    [recordError, setRecordError] = useState<GuidedError | null>(null);
   const navigate = useNavigate(),
     heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -100,24 +104,12 @@ export function Onboarding() {
       setProfileList('skills', groups);
     }
   };
-  const exp = state.profile.experience[0];
-  const addExperience = () => {
-    patchPref({ experience: 'si' });
-    if (!exp)
-      setProfileList('experience', [
-        {
-          id: uid('exp'),
-          role: '',
-          company: '',
-          location: p.city,
-          startDate: '',
-          endDate: '',
-          current: false,
-          bullets: [],
-          tech: [],
-        },
-      ]);
+  const clearHistoryError = () => {
+    setRecordError(null);
+    setError('');
   };
+  const updateLocation = (v: Partial<Pick<typeof p, 'country' | 'city'>>) =>
+    apply((s) => updateHomeLocation(s, v));
   const next = () => {
     setError('');
     setHelp(false);
@@ -125,15 +117,29 @@ export function Onboarding() {
       setError('Escribe un trabajo o elige una de las ideas.');
       return;
     }
+    if ((step === 1 || step === 5) && !p.country.trim()) {
+      setError('Elige el país donde vives.');
+      if (step === 5) patchPref({ step: 1 });
+      requestAnimationFrame(() => document.getElementById('home-country')?.focus());
+      return;
+    }
     if (step === 1 && !p.city.trim()) {
       setError('Escribe la comuna o ciudad donde buscas.');
       return;
     }
-    if (step === 3 && exp && !exp.role.trim()) {
-      setError(
-        'Escribe qué trabajo o actividad hacías. Si lo prefieres, puedes dejarlo para después.',
-      );
-      return;
+    if (step === 3 || step === 4) {
+      const problem = historyError(step === 3 ? state.profile.experience : state.profile.education);
+      if (problem) {
+        setRecordError(problem);
+        setError(problem.message);
+        return;
+      }
+      setRecordError(null);
+      if (step === 3) {
+        const records = state.profile.experience.filter(hasExperience);
+        setProfileList('experience', records);
+        patchPref({ experience: records.length ? 'si' : 'no' });
+      } else setProfileList('education', state.profile.education.filter(hasEducation));
     }
     if (step === 5) {
       if (!p.fullName.trim()) {
@@ -145,7 +151,7 @@ export function Onboarding() {
         return;
       }
       if (p.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email)) {
-        setError('Revisa el correo. Por ejemplo: maria@correo.cl');
+        setError('Revisa el correo. Por ejemplo: maria@correo.com');
         return;
       }
       if (p.phone && p.phone.replace(/\D/g, '').length < 8) {
@@ -190,7 +196,7 @@ export function Onboarding() {
         <ol className="wizard-steps">
           {[
             'Tu trabajo ideal',
-            'Dónde buscas',
+            'Tu ubicación',
             'Tus horarios',
             'Tu experiencia',
             'Lo que sabes',
@@ -213,6 +219,7 @@ export function Onboarding() {
         </h1>
         <p className="lead">{subtitles[step]}</p>
         <form
+          noValidate
           onSubmit={(e) => {
             e.preventDefault();
             next();
@@ -250,24 +257,57 @@ export function Onboarding() {
           )}
           {step === 1 && (
             <>
+              <Select
+                id="home-country"
+                label="País donde vives"
+                value={p.country}
+                autoComplete="country-name"
+                onChange={(e) => updateLocation({ country: e.target.value })}
+              >
+                <option value="">Elige tu país</option>
+                {p.country && !countries.some((c) => c.name === p.country) && (
+                  <option value={p.country}>{p.country}</option>
+                )}
+                {[...countries]
+                  .sort((a, b) => a.name.localeCompare(b.name, 'es'))
+                  .map((c) => (
+                    <option key={c.code} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+              </Select>
               <TextInput
                 label="Comuna o ciudad"
                 value={p.city}
-                onChange={(e) => {
-                  patchPersonal({ city: e.target.value });
-                  patchPref({ city: e.target.value });
-                }}
+                onChange={(e) => updateLocation({ city: e.target.value })}
                 autoComplete="address-level2"
-                placeholder="Por ejemplo: Osorno"
+                placeholder={
+                  countries.find((c) => c.name === p.country)?.cities[0] || 'Por ejemplo: Madrid'
+                }
+                list="home-cities"
               />
+              <datalist id="home-cities">
+                {countries
+                  .find((c) => c.name === p.country)
+                  ?.cities.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+              </datalist>
+              <p className="field-hint">
+                Revisa que la ciudad corresponda al país elegido. El destino de búsqueda se puede
+                cambiar en «Buscar trabajo».
+              </p>
               <Select
                 label="¿Hasta dónde puedes trasladarte?"
                 value={pref.travel}
                 onChange={(e) => patchPref({ travel: e.target.value })}
               >
                 <option value="">Lo decidiré según el trabajo</option>
-                <option>Solo en mi comuna</option>
-                <option>También a comunas cercanas</option>
+                <option>Solo en mi ciudad</option>
+                <option>También a localidades cercanas</option>
+                {['Solo en mi comuna', 'También a comunas cercanas'].includes(pref.travel) && (
+                  <option>{pref.travel}</option>
+                )}
                 <option>Puedo cambiarme de ciudad</option>
                 <option>Busco trabajar desde casa</option>
               </Select>
@@ -298,85 +338,29 @@ export function Onboarding() {
           )}
           {step === 3 && (
             <>
-              <div className="row">
-                <Button type="button" onClick={addExperience}>
-                  Sí, quiero contar una experiencia
-                </Button>
-                {!exp && (
+              <GuidedExperience
+                records={state.profile.experience}
+                error={recordError}
+                onEdited={clearHistoryError}
+                onChange={(records) => {
+                  setProfileList('experience', records);
+                  patchPref({ experience: records.length ? 'si' : 'no' });
+                }}
+              />
+              {state.profile.experience.length === 0 && (
+                <>
                   <Button
-                    type="button"
                     variant={pref.experience === 'no' ? 'primary' : 'ghost'}
                     onClick={() => patchPref({ experience: 'no' })}
                   >
                     Busco mi primer trabajo
                   </Button>
-                )}
-              </div>
-              {exp && (
-                <div className="stack">
-                  <TextInput
-                    label="¿Qué trabajo o actividad hacías?"
-                    value={exp.role}
-                    placeholder="Por ejemplo: ayudante en un almacén"
-                    onChange={(e) =>
-                      setProfileList(
-                        'experience',
-                        state.profile.experience.map((x) =>
-                          x.id === exp.id ? { ...x, role: e.target.value } : x,
-                        ),
-                      )
-                    }
-                  />
-                  <TextInput
-                    label="¿Dónde? (opcional)"
-                    value={exp.company}
-                    placeholder="Empresa, negocio familiar o por mi cuenta"
-                    onChange={(e) =>
-                      setProfileList(
-                        'experience',
-                        state.profile.experience.map((x) =>
-                          x.id === exp.id ? { ...x, company: e.target.value } : x,
-                        ),
-                      )
-                    }
-                  />
-                  <TextArea
-                    label="¿Qué tareas hacías?"
-                    value={exp.bullets.join('\n')}
-                    placeholder="Atendía clientes, ordenaba los productos y ayudaba en caja."
-                    hint="Escríbelo con tus palabras. No hacen falta cifras."
-                    onChange={(e) =>
-                      setProfileList(
-                        'experience',
-                        state.profile.experience.map((x) =>
-                          x.id === exp.id ? { ...x, bullets: e.target.value.split('\n') } : x,
-                        ),
-                      )
-                    }
-                  />
-                  <Link to="/perfil" className="text-link">
-                    Tengo más experiencias o quiero agregar fechas
-                  </Link>
-                  {!exp.role.trim() &&
-                    !exp.company.trim() &&
-                    !exp.bullets.some((b) => b.trim()) && (
-                      <Button
-                        type="button"
-                        onClick={() => {
-                          setProfileList('experience', state.profile.experience.slice(1));
-                          patchPref({ experience: 'no', step: 4 });
-                          setError('');
-                        }}
-                      >
-                        Dejar esta experiencia vacía para después
-                      </Button>
-                    )}
-                </div>
-              )}
-              {pref.experience === 'no' && !exp && (
-                <p className="notice">
-                  Está bien. Podemos destacar tus habilidades y estudios para tu primer trabajo.
-                </p>
+                  {pref.experience === 'no' && (
+                    <p className="notice">
+                      Está bien. Podemos destacar tus habilidades y estudios para tu primer trabajo.
+                    </p>
+                  )}
+                </>
               )}
             </>
           )}
@@ -424,36 +408,12 @@ export function Onboarding() {
                   Agregar
                 </Button>
               </div>
-              <details>
-                <summary>Agregar mis estudios (opcional)</summary>
-                <TextInput
-                  label="Estudios o curso"
-                  value={state.profile.education[0]?.degree || ''}
-                  placeholder="Enseñanza media completa, curso de cocina…"
-                  onChange={(e) => {
-                    const old = state.profile.education[0];
-                    setProfileList(
-                      'education',
-                      old
-                        ? state.profile.education.map((x) =>
-                            x.id === old.id ? { ...x, degree: e.target.value } : x,
-                          )
-                        : [
-                            {
-                              id: uid('edu'),
-                              degree: e.target.value,
-                              institution: '',
-                              location: '',
-                              startDate: '',
-                              endDate: '',
-                              current: false,
-                              detail: '',
-                            },
-                          ],
-                    );
-                  }}
-                />
-              </details>
+              <GuidedEducation
+                records={state.profile.education}
+                onChange={(records) => setProfileList('education', records)}
+                error={recordError}
+                onEdited={clearHistoryError}
+              />
             </>
           )}
           {step === 5 && (
@@ -470,7 +430,13 @@ export function Onboarding() {
                 autoComplete="tel"
                 value={p.phone}
                 onChange={(e) => patchPersonal({ phone: e.target.value })}
-                placeholder="+56 9 1234 5678"
+                placeholder={
+                  p.country === 'España'
+                    ? '+34 612 345 678'
+                    : p.country === 'Chile'
+                      ? '+56 9 1234 5678'
+                      : 'Incluye el código de tu país'
+                }
               />
               <TextInput
                 label="Correo electrónico (si tienes)"
@@ -478,9 +444,11 @@ export function Onboarding() {
                 autoComplete="email"
                 value={p.email}
                 onChange={(e) => patchPersonal({ email: e.target.value })}
-                placeholder="nombre@correo.cl"
+                placeholder="nombre@correo.com"
               />
-              <p className="field-hint">No pedimos tu RUT ni tu dirección exacta.</p>
+              <p className="field-hint">
+                No hace falta tu documento de identidad ni tu dirección exacta.
+              </p>
             </div>
           )}
           {error && (
@@ -496,6 +464,7 @@ export function Onboarding() {
                 onClick={() => {
                   setError('');
                   setHelp(false);
+                  setRecordError(null);
                   patchPref({ step: step - 1 });
                 }}
               >
