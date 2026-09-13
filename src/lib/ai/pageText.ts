@@ -19,8 +19,44 @@ import type { AiSettings } from './settings';
 /** Tope de texto que se guarda de una página, para no ahogar a un modelo chico. */
 const MAX_CHARS = 14000;
 
+/**
+ * Limpieza del markdown que devuelve el lector.
+ *
+ * No es cosmética. Una página de portal de empleo llega con menús, avisos de
+ * cookies, publicidad y cada enlace con su URL completa entre paréntesis. En un
+ * aviso real de Chiletrabajos eso era el 66% del texto, y el aviso de verdad
+ * quedaba fuera al recortar: el modelo no veía la oferta y respondía cualquier
+ * cosa.
+ */
+export function cleanPageMarkdown(markdown: string): string {
+  let text = markdown;
+  text = text.replace(/!\[[^\]]*\]\([^)]*\)/g, ''); // imágenes
+  text = text.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1'); // enlaces: se queda el texto
+  text = text.replace(/^\s*(PUBLICIDAD|ADVERTISEMENT|×)\s*$/gim, '');
+
+  const out: string[] = [];
+  const seen = new Set<string>();
+
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.replace(/^\s*[*\-+]\s*/, '').trim();
+    if (!line) {
+      if (out.length && out[out.length - 1] !== '') out.push('');
+      continue;
+    }
+    // Las barras de navegación vienen repetidas (escritorio y móvil). Se
+    // descartan las líneas cortas ya vistas; las largas pueden ser contenido
+    // legítimo que casualmente se repite.
+    const key = line.toLowerCase();
+    if (line.length < 40 && seen.has(key)) continue;
+    seen.add(key);
+    out.push(line);
+  }
+
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function trim(text: string): string {
-  const clean = text.trim();
+  const clean = cleanPageMarkdown(text);
   return clean.length > MAX_CHARS ? `${clean.slice(0, MAX_CHARS)}\n\n[…texto recortado…]` : clean;
 }
 

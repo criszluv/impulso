@@ -71,8 +71,21 @@ Quedan dos vías, y en las dos alguien más ve el enlace, así que la app lo dic
 No funciona en todas partes: los sitios que arman la página con JavaScript o piden sesión iniciada
 —LinkedIn entre ellos— no se dejan leer, y ahí la app te dice que pegues el texto.
 
-Probado con un aviso real de Get on Board: 4 segundos en leer la página, 10 en extraer los campos, y
-salieron correctos el cargo, la empresa, la modalidad y el rango de sueldo.
+El texto que devuelve el lector se limpia antes de usarlo: se quitan menús, publicidad y las URL de
+cada enlace. No es cosmética. En un aviso real de Chiletrabajos, esa basura era el **66% del texto**
+(14.021 caracteres contra 4.400 de contenido) y el aviso de verdad quedaba fuera al recortar, con lo
+que el modelo no veía la oferta y respondía cualquier cosa.
+
+Probado con avisos reales de Get on Board y Chiletrabajos: de 1 a 4 segundos en leer la página, y
+salen correctos el cargo, la empresa, la ubicación y el sueldo.
+
+### Cuando el modelo contesta en vez de escribir
+
+Un modo de fallo real: se le pide la carta y responde como asistente («Hola Cristóbal, he revisado
+tu perfil… ¿te gustaría que redacte una carta?»). Cumple el esquema, así que la validación de tipos
+lo deja pasar. La app revisa el texto —preguntas, comentarios sobre el perfil, listas de pasos,
+saludar a quien firma— y si detecta dos o más señales, reintenta insistiendo; si vuelve a fallar,
+avisa en vez de guardar eso como carta.
 
 ### Cuando tu perfil no calza con el aviso
 

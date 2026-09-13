@@ -10,6 +10,7 @@ import { describeSettings } from './settings';
 import type { AiSettings } from './settings';
 import type { Profile } from '../../types';
 import { coerceLetter } from './coerce';
+import { LETTER_RETRY_NOTE, checkLetter } from './letterCheck';
 import type { BulletRewrite, LetterDraft, LetterTone } from './types';
 
 const MONTH = 'Mes en formato AAAA-MM, por ejemplo 2021-03. Cadena vacía si el texto no lo dice.';
@@ -87,7 +88,7 @@ const CvSchema = z.object({
     ),
 });
 
-const CV_SYSTEM = `Eres un extractor de datos de currículums. Recibes el texto plano de un CV o de un perfil de LinkedIn y devuelves sus datos estructurados.
+const CV_SYSTEM = `Tu tarea es leer un currículum o un perfil profesional y devolver sus datos en forma estructurada.
 
 Reglas:
 - No inventes nada. Si un dato no está en el texto, devuelve cadena vacía o lista vacía.
@@ -100,25 +101,31 @@ Reglas:
 - Distingue bien el cargo de la empresa: el cargo describe una función, la empresa es una organización.
 - Si algo te resulta ambiguo, asígnalo igual a lo más probable y déjalo anotado en warnings.`;
 
+/*
+ * Campos en español a propósito. Con el nombre «role», el modelo entendía que
+ * le preguntaban por su propio rol y devolvía «extractor» o «Job Description
+ * Extractor» como si fuera el cargo ofrecido.
+ */
 const JobSchema = z.object({
-  role: z.string().describe('Cargo que se ofrece.'),
-  company: z.string().describe('Empresa que contrata. Vacío si el aviso es anónimo.'),
-  location: z.string().describe('Ciudad y modalidad (remoto, híbrido, presencial).'),
-  salary: z.string().describe('Renta o rango tal como aparece. Vacío si no lo dice.'),
-  contact: z.string().describe('Nombre de la persona de contacto, o su correo. Vacío si el aviso no da ninguno; no pongas la dirección del aviso.'),
-  notes: z
+  cargo: z.string().describe('El puesto que ofrece la empresa, tal como aparece en el título del aviso. Por ejemplo «Técnico Informático» o «Jefe de Bodega».'),
+  empresa: z.string().describe('Nombre de la empresa que contrata. Vacío si el aviso es anónimo.'),
+  ubicacion: z.string().describe('Ciudad y modalidad (remoto, híbrido, presencial).'),
+  sueldo: z.string().describe('Renta o rango tal como aparece en el aviso. Vacío si no lo dice.'),
+  contacto: z.string().describe('Nombre de la persona de contacto, o su correo. Vacío si el aviso no da ninguno; no pongas la dirección de la página.'),
+  observaciones: z
     .array(z.string())
     .describe(
-      'Como máximo 3 avisos MUY breves (menos de 20 palabras cada uno) sobre lo que quedó ambiguo al leer el aviso. No es el lugar para copiar el contenido de la publicación: si no hubo ambigüedades, devuelve una lista vacía.',
+      'Como máximo 3 avisos MUY breves (menos de 20 palabras cada uno) sobre lo que quedó ambiguo al leer la publicación. No es el lugar para copiar su contenido: si no hubo ambigüedades, devuelve una lista vacía.',
     ),
 });
 
-const JOB_SYSTEM = `Eres un extractor de datos de avisos de trabajo. Recibes el texto pegado de una publicación de empleo, tal como quedó al copiarla del portal, y devuelves sus datos estructurados.
+const JOB_SYSTEM = `Tu tarea es leer una publicación de empleo y devolver sus datos en forma estructurada. El texto llega tal como quedó al copiarlo del portal.
 
 Reglas:
 - No inventes. Si un dato no está, devuelve cadena vacía.
 - El texto trae basura del sitio (menús, botones, «Postular», cookies). Ignórala.
-- Copia los valores tal como aparecen; no traduzcas ni normalices el sueldo.`;
+- Copia los valores tal como aparecen; no traduzcas ni normalices el sueldo.
+- Los valores salen del aviso, nunca de estas instrucciones.`;
 
 const BulletSchema = z.object({
   options: z
@@ -352,10 +359,30 @@ export async function generateLetterWithAi(input: LetterInput, settings: AiSetti
     .filter((line) => line !== '')
     .join('\n');
 
-  const raw = await runStructured(settings, LetterSchema, LETTER_SYSTEM, user, 4000);
-  const draft = coerceLetter(raw);
+  let raw = await runStructured(settings, LetterSchema, LETTER_SYSTEM, user, 4000);
+  let draft = coerceLetter(raw);
+
+  /*
+   * Modo de fallo real: el modelo contesta al usuario en vez de escribir la
+   * carta («Hola Cristóbal, he revisado tu perfil… ¿te gustaría que redacte
+   * una?»). Cumple el esquema, así que solo se detecta mirando el texto.
+   */
+  let check = checkLetter(draft.body, profile.personal.fullName);
+  if (!check.ok) {
+    raw = await runStructured(settings, LetterSchema, `${LETTER_SYSTEM}
+
+${LETTER_RETRY_NOTE}`, user, 4000);
+    draft = coerceLetter(raw);
+    check = checkLetter(draft.body, profile.personal.fullName);
+  }
+
   if (!draft.body.trim()) {
     throw new AiError('El modelo no devolvió ninguna carta. Vuelve a intentar.');
+  }
+  if (!check.ok) {
+    throw new AiError(
+      `El modelo respondió como si conversara contigo (${check.reasons.join(', ')}) en vez de escribir la carta, incluso al insistirle. Suele pasar con modelos chicos: prueba con uno más grande, o usa la plantilla sin IA.`,
+    );
   }
 
   /*

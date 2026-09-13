@@ -168,12 +168,14 @@ export function coerceCv(raw: unknown): ParsedCv {
 
 export function coerceJob(raw: unknown): ParsedJob & { contact: string } {
   const data = asObject(raw);
-  const contact = str(data.contact);
+  // Los campos van en español en el esquema; se acepta el nombre en inglés por
+  // si el modelo decide traducirlos.
+  const contact = str(data.contacto ?? data.contact);
   return {
-    role: str(data.role),
-    company: str(data.company),
-    location: str(data.location),
-    salary: str(data.salary),
+    role: str(data.cargo ?? data.role),
+    company: str(data.empresa ?? data.company),
+    location: str(data.ubicacion ?? data.location),
+    salary: str(data.sueldo ?? data.salary),
     // Algunos modelos ponen ahí la dirección del propio aviso, que no es un contacto.
     contact: /^https?:\/\//i.test(contact) ? '' : contact,
     source: '',
@@ -182,7 +184,7 @@ export function coerceJob(raw: unknown): ParsedJob & { contact: string } {
      * aviso» y devuelve la publicación entera troceada: se vio pasar con 40
      * entradas. Los avisos útiles son cortos y son pocos.
      */
-    notes: strings(data.notes)
+    notes: strings(data.observaciones ?? data.notes)
       .filter((n) => n.length <= 160)
       .slice(0, 3),
   };
