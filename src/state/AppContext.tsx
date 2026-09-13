@@ -58,7 +58,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setAi = useCallback((next: AiSettings) => {
     setAiState(next);
-    if (next.apiKey.trim()) saveAiSettings(next);
+    // Se guarda por el proveedor elegido, no por la clave: los modelos locales
+    // no llevan clave y aun así hay que recordarlos.
+    if (next.preset) saveAiSettings(next);
     else clearAiSettings();
   }, []);
 

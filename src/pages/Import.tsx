@@ -9,7 +9,7 @@ import type { ParsedCv } from '../lib/import/parseCv';
 import { parseLinkedInCsvs } from '../lib/import/linkedin';
 import { SECTION_LABELS, applyParsed, countOf } from '../lib/import/apply';
 import type { ImportMode, SectionKey } from '../lib/import/apply';
-import { hasAiKey } from '../lib/ai/settings';
+import { describeSettings, isConfigured, presetById } from '../lib/ai/settings';
 import { AiError } from '../lib/ai/errors';
 import { formatRange } from '../lib/utils';
 import { Badge, Button, Card, Empty, Select, TextArea, Toggle } from '../components/ui';
@@ -58,7 +58,8 @@ export function ImportPage() {
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const aiReady = hasAiKey(ai);
+  const aiReady = isConfigured(ai);
+  const aiIsLocal = /localhost|127\.0\.0\.1/.test(presetById(ai.preset)?.baseUrl ?? '');
   const [source, setSource] = useState<Source | null>(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -243,8 +244,8 @@ export function ImportPage() {
                   <h3>¿Quedaron datos en campos equivocados?</h3>
                   <p>
                     El lector incluido adivina la estructura con reglas, y con CV de columnas o
-                    encabezados poco comunes se equivoca. Con una clave de la API de Claude, el mismo
-                    texto lo interpreta un modelo y esto mejora bastante.
+                    encabezados poco comunes se equivoca. Con un modelo detrás mejora bastante, y
+                    puede ser uno gratis corriendo en tu propio computador.
                   </p>
                 </div>
                 <Link to="/ajustes">
@@ -436,10 +437,11 @@ export function ImportPage() {
             ✦
           </span>
           <div style={{ flex: 1, minWidth: 220 }}>
-            <h3>Lectura con IA activada</h3>
+            <h3>Lectura con IA activada · {describeSettings(ai)}</h3>
             <p>
-              El texto se manda a Claude para interpretarlo, que es bastante más preciso que las
-              reglas locales. Solo viaja el documento que cargues acá, nada más de tu perfil.
+              {aiIsLocal
+                ? 'El modelo corre en tu computador, así que el documento no sale de tu equipo. Es más lento que uno de pago, pero gratis.'
+                : 'El texto del documento se manda al proveedor para interpretarlo, que es bastante más preciso que las reglas locales. Solo viaja lo que cargues acá, nada más de tu perfil.'}
             </p>
           </div>
           <Toggle label="Usar IA" checked={useAi} onChange={setUseAi} />
@@ -452,9 +454,9 @@ export function ImportPage() {
           <div style={{ flex: 1, minWidth: 220 }}>
             <h3>¿La lectura te deja datos en campos equivocados?</h3>
             <p>
-              El lector incluido funciona sin conexión y sin costo, pero adivina la estructura con
-              reglas y se confunde con CV de columnas o encabezados poco comunes. Con una clave de la
-              API de Claude, el mismo texto lo interpreta un modelo.
+              El lector incluido adivina la estructura con reglas y se confunde con CV de columnas o
+              encabezados poco comunes. Con un modelo detrás, el mismo texto se interpreta. Puedes
+              usar uno gratis en tu propio computador o un servicio en la nube.
             </p>
           </div>
           <Link to="/ajustes">

@@ -1,3 +1,4 @@
+import { AiError } from './errors';
 import type { AiSettings } from './settings';
 
 /**
@@ -45,9 +46,19 @@ export async function describeAiError(error: unknown): Promise<string> {
   return error instanceof Error ? error.message : 'Ocurrió un error inesperado.';
 }
 
-/** Consulta mínima para confirmar que la clave y el modelo funcionan. */
-export async function testConnection(settings: AiSettings): Promise<{ ok: true } | { ok: false; message: string }> {
+/**
+ * Consulta mínima para confirmar que el servidor, el modelo y la clave sirven.
+ * Los módulos pesados se cargan aquí dentro, no al importar este archivo.
+ */
+export async function testConnection(
+  settings: AiSettings,
+): Promise<{ ok: true } | { ok: false; message: string }> {
   try {
+    if (settings.provider !== 'anthropic') {
+      const { pingOpenAiCompat } = await import('./openaiCompat');
+      await pingOpenAiCompat(settings);
+      return { ok: true };
+    }
     const client = await createClient(settings);
     await client.messages.create({
       model: settings.model,
@@ -56,6 +67,7 @@ export async function testConnection(settings: AiSettings): Promise<{ ok: true }
     });
     return { ok: true };
   } catch (error) {
+    if (error instanceof AiError) return { ok: false, message: error.message };
     return { ok: false, message: await describeAiError(error) };
   }
 }

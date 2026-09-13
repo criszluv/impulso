@@ -5,7 +5,7 @@ import type { Application, ApplicationStatus } from '../types';
 import { daysSince, formatDate, uid } from '../lib/utils';
 import { matchJob } from '../lib/analysis';
 import { parseJobPosting, sourceFromUrl } from '../lib/import/parseJob';
-import { hasAiKey } from '../lib/ai/settings';
+import { isConfigured } from '../lib/ai/settings';
 import { AiError } from '../lib/ai/errors';
 import {
   Button,
@@ -60,7 +60,7 @@ export function Applications() {
   const [jobText, setJobText] = useState('');
   const [readNotes, setReadNotes] = useState<string[]>([]);
   const [reading, setReading] = useState(false);
-  const aiReady = hasAiKey(ai);
+  const aiReady = isConfigured(ai);
 
   const selected = applications.find((a) => a.id === selectedId) ?? null;
 

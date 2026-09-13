@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { ACTION_VERBS, reviewBullet } from '../lib/analysis';
 import { buildBullet } from '../lib/writing';
 import { useApp } from '../state/context';
-import { hasAiKey } from '../lib/ai/settings';
+import { isConfigured } from '../lib/ai/settings';
 import { AiError } from '../lib/ai/errors';
-import type { BulletRewrite } from '../lib/ai/extract';
+import type { BulletRewrite } from '../lib/ai/types';
 import { Button, Field, IssueList, TextInput } from './ui';
 
 /** Editor de los logros de un cargo, con revisión en vivo y asistente XYZ. */
@@ -20,7 +20,7 @@ export function BulletEditor({
   company?: string;
 }) {
   const { ai } = useApp();
-  const aiReady = hasAiKey(ai);
+  const aiReady = isConfigured(ai);
   const [openReview, setOpenReview] = useState<number | null>(null);
   const [wizard, setWizard] = useState(false);
   const [rewriting, setRewriting] = useState<number | null>(null);

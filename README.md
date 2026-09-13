@@ -32,8 +32,8 @@ corresponden. El **asistente con IA** (abajo) resuelve justamente eso.
 
 ## Asistente con IA (opcional)
 
-Si configuras una clave de la API de Claude en Ajustes, el mismo texto lo interpreta un modelo en
-vez de las reglas locales. Sirve para tres cosas:
+Si conectas un modelo en Ajustes, el texto se interpreta en vez de adivinarse con reglas. Sirve
+para tres cosas:
 
 - **Leer un CV o un perfil de LinkedIn** con bastante más precisión, sobre todo cuando el PDF llega
   desordenado o con las columnas mezcladas.
@@ -42,19 +42,40 @@ vez de las reglas locales. Sirve para tres cosas:
 - **Reescribir un logro** del CV: propone tres versiones y, si al logro le falta una cifra, la
   pide en vez de inventarla.
 
-Detalles que importan:
+### Con qué se puede conectar
 
-- **Es opcional y con tu propia clave.** Sin clave, la app funciona completa con el lector
+| Proveedor | Costo | Notas |
+|---|---|---|
+| **Ollama** (en tu computador) | Gratis | Nada sale de tu equipo. Acepta llamadas desde `localhost` sin configurar nada. |
+| **LM Studio** (en tu computador) | Gratis | Igual que Ollama, con interfaz gráfica. Hay que activar «Enable CORS» en el servidor. |
+| **Google Gemini** | Capa gratuita | Clave desde Google AI Studio, sin tarjeta. |
+| **Groq** | Capa gratuita | Tope diario, muy rápido. |
+| **OpenRouter** | Modelos `:free` | Muchos modelos con una sola clave. |
+| **Claude (Anthropic)** | De pago | El más preciso con un CV mal maquetado. |
+| Otro compatible con OpenAI | — | Mistral, Together, DeepSeek, tu propio servidor. |
+
+Claude va por su SDK oficial; el resto comparte un único transporte compatible con el formato de
+OpenAI. Todos fueron comprobados desde el navegador: los cinco servicios de la nube responden a
+peticiones desde otro origen, y Ollama también.
+
+### Detalles que importan
+
+- **Es opcional y con respaldo.** Sin configurar nada, la app funciona completa con el lector
   incluido; la lectura sin IA queda siempre disponible como alternativa y como respaldo automático
   si la llamada falla.
+- **Con un modelo local no sale nada de tu equipo.** Con uno en la nube, viaja solo el texto que le
+  pidas leer en ese momento; el resto del perfil, las postulaciones y las notas no salen nunca.
 - **La clave vive solo en tu navegador**, en una entrada de `localStorage` aparte del resto del
   estado, y **la copia de seguridad que exportas no la incluye**. Como la app no tiene servidor, la
-  petición sale directo del navegador a la API de Anthropic (`dangerouslyAllowBrowser`): es
-  aceptable porque cada persona pone su clave, pero por lo mismo no conviene guardarla en un equipo
-  compartido.
-- **Solo viaja el texto que le pidas leer** en ese momento. El resto del perfil, las postulaciones
-  y las notas no salen del equipo.
-- El SDK y el esquema se cargan solo cuando la IA se usa de verdad, así que quien no la active no
+  petición sale directo desde el navegador: es aceptable porque cada persona pone su clave, pero
+  por lo mismo no conviene guardarla en un equipo compartido.
+- **Lo que devuelve el modelo se normaliza antes de guardarlo.** Los modelos pequeños cumplen el
+  esquema «casi siempre»: mandan un número donde va texto o escriben «enero 2020» donde se pidió
+  `2020-01`. En vez de rechazar la respuesta, se arregla lo arreglable.
+- **A los modelos que razonan se les apaga el razonamiento** en Ollama (`reasoning_effort: none`).
+  Sin eso se comen el presupuesto de salida pensando y devuelven vacío: medido con un modelo de 9B,
+  apagarlo bajó una extracción de 15 s a 1 s con el mismo resultado.
+- Los SDK y esquemas se cargan solo cuando la IA se usa de verdad, así que quien no la active no
   paga ese peso en el arranque.
 
 ## Qué más hace
@@ -159,9 +180,11 @@ src/
     ats.ts         reglas de compatibilidad con filtros automáticos
     writing.ts     generadores: resumen, logro, carta, LinkedIn, banco de preguntas
     ai/
-      settings.ts  clave y modelo, guardados aparte del resto del estado
-      client.ts    cliente del SDK de Anthropic y traducción de errores
-      extract.ts   esquemas y prompts de lectura de CV, avisos y logros
+      settings.ts     proveedores, clave y modelo, guardados aparte del estado
+      client.ts       cliente del SDK de Anthropic y traducción de errores
+      openaiCompat.ts transporte para Ollama, LM Studio, Gemini, Groq y OpenRouter
+      extract.ts      esquemas y prompts de lectura de CV, avisos y logros
+      coerce.ts       normalización de lo que devuelve un modelo poco fiable
     import/
       files.ts     texto desde PDF, DOCX y ZIP, y parser de CSV
       parseCv.ts   lector heurístico de un CV en texto plano

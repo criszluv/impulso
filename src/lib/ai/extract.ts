@@ -1,16 +1,15 @@
 import { z } from 'zod';
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
-import type { LanguageLevel } from '../../types';
-import { uid } from '../utils';
-import { emptyParsed } from '../import/parseCv';
 import type { ParsedCv } from '../import/parseCv';
 import type { ParsedJob } from '../import/parseJob';
 import { sourceFromUrl } from '../import/parseJob';
-import { createClient, describeAiError } from './client';
 import { AiError } from './errors';
+import { coerceCv, coerceJob, coerceRewrite } from './coerce';
+import { callStructured } from './openaiCompat';
+import { describeSettings } from './settings';
 import type { AiSettings } from './settings';
+import type { BulletRewrite } from './types';
 
-const MONTH = 'Mes en formato AAAA-MM. Cadena vacía si el texto no lo dice.';
+const MONTH = 'Mes en formato AAAA-MM, por ejemplo 2021-03. Cadena vacía si el texto no lo dice.';
 
 const ExperienceSchema = z.object({
   role: z.string().describe('Cargo tal como aparece en el documento.'),
@@ -21,9 +20,7 @@ const ExperienceSchema = z.object({
   current: z.boolean().describe('true si dice «actualidad», «presente» o equivalente.'),
   bullets: z
     .array(z.string())
-    .describe(
-      'Logros y responsabilidades, uno por elemento, copiados literalmente. No los reescribas ni los resumas.',
-    ),
+    .describe('Logros y responsabilidades, uno por elemento, copiados literalmente. No los reescribas ni los resumas.'),
   tech: z.array(z.string()).describe('Herramientas, software o tecnologías nombradas en ese cargo.'),
 });
 
@@ -53,7 +50,7 @@ const CvSchema = z.object({
   skillGroups: z
     .array(
       z.object({
-        name: z.string().describe('Nombre de la categoría, por ejemplo «Herramientas» o «Idiomas técnicos».'),
+        name: z.string().describe('Nombre de la categoría, por ejemplo «Herramientas».'),
         items: z.array(z.string()),
       }),
     )
@@ -83,7 +80,7 @@ const CvSchema = z.object({
   warnings: z
     .array(z.string())
     .describe(
-      'Avisos breves en español para la persona: datos ambiguos, secciones que no pudiste interpretar o campos que conviene revisar. Lista vacía si todo quedó claro.',
+      'Avisos breves en español sobre datos ambiguos o campos que conviene revisar. Lista vacía si todo quedó claro.',
     ),
 });
 
@@ -98,71 +95,6 @@ Reglas:
 - El texto puede venir de un PDF y llegar desordenado, con columnas mezcladas o líneas cortadas. Reconstruye el sentido antes de asignar cada dato a su campo.
 - Distingue bien el cargo de la empresa: el cargo describe una función, la empresa es una organización.
 - Si algo te resulta ambiguo, asígnalo igual a lo más probable y déjalo anotado en warnings.`;
-
-type CvResult = z.infer<typeof CvSchema>;
-
-function toParsed(data: CvResult): ParsedCv {
-  const result = emptyParsed();
-
-  result.personal = {
-    fullName: data.fullName,
-    headline: data.headline,
-    email: data.email,
-    phone: data.phone,
-    city: data.city,
-    country: data.country,
-    linkedin: data.linkedin,
-    github: data.github,
-    website: data.website,
-    summary: data.summary,
-  };
-
-  result.experience = data.experience.map((e) => ({ ...e, id: uid('exp') }));
-  result.education = data.education.map((e) => ({ ...e, id: uid('edu') }));
-  result.skills = data.skillGroups
-    .filter((g) => g.items.length)
-    .map((g) => ({ ...g, id: uid('sk') }));
-  result.languages = data.languages.map((l) => ({
-    id: uid('lang'),
-    name: l.name,
-    level: l.level as LanguageLevel,
-  }));
-  result.projects = data.projects.map((p) => ({ ...p, id: uid('prj') }));
-  result.certifications = data.certifications.map((c) => ({ ...c, id: uid('cert') }));
-  result.notes = data.warnings;
-
-  return result;
-}
-
-/** Lee un CV con Claude y devuelve la misma estructura que el lector local. */
-export async function extractCvWithAi(text: string, settings: AiSettings): Promise<ParsedCv> {
-  try {
-    const client = await createClient(settings);
-    const message = await client.beta.messages.parse({
-      model: settings.model,
-      max_tokens: 16000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      system: CV_SYSTEM,
-      messages: [{ role: 'user', content: `Extrae los datos de este CV:\n\n${text}` }],
-      output_config: { format: zodOutputFormat(CvSchema) },
-    });
-
-    if (message.stop_reason === 'refusal') {
-      throw new AiError('El modelo declinó procesar este documento. Usa el lector sin IA.');
-    }
-    if (!message.parsed_output) {
-      throw new AiError('La respuesta no vino en el formato esperado. Vuelve a intentar.');
-    }
-
-    const parsed = toParsed(message.parsed_output);
-    parsed.notes.unshift(`Leído con ${settings.model}. Revisa igual: la IA también se equivoca.`);
-    return parsed;
-  } catch (error) {
-    if (error instanceof AiError) throw error;
-    throw new AiError(await describeAiError(error));
-  }
-}
 
 const JobSchema = z.object({
   role: z.string().describe('Cargo que se ofrece.'),
@@ -180,47 +112,6 @@ Reglas:
 - El texto trae basura del sitio (menús, botones, «Postular», cookies). Ignórala.
 - Copia los valores tal como aparecen; no traduzcas ni normalices el sueldo.`;
 
-/** Lee un aviso de trabajo con Claude. */
-export async function extractJobWithAi(
-  text: string,
-  url: string,
-  settings: AiSettings,
-): Promise<ParsedJob & { contact: string }> {
-  try {
-    const client = await createClient(settings);
-    const message = await client.beta.messages.parse({
-      model: settings.model,
-      max_tokens: 4000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      system: JOB_SYSTEM,
-      messages: [{ role: 'user', content: `Extrae los datos de este aviso:\n\n${text}` }],
-      output_config: { format: zodOutputFormat(JobSchema) },
-    });
-
-    if (message.stop_reason === 'refusal') {
-      throw new AiError('El modelo declinó procesar este aviso. Usa el lector sin IA.');
-    }
-    if (!message.parsed_output) {
-      throw new AiError('La respuesta no vino en el formato esperado. Vuelve a intentar.');
-    }
-
-    const data = message.parsed_output;
-    return {
-      role: data.role,
-      company: data.company,
-      location: data.location,
-      salary: data.salary,
-      contact: data.contact,
-      source: sourceFromUrl(url),
-      notes: data.notes,
-    };
-  } catch (error) {
-    if (error instanceof AiError) throw error;
-    throw new AiError(await describeAiError(error));
-  }
-}
-
 const BulletSchema = z.object({
   options: z
     .array(
@@ -232,9 +123,7 @@ const BulletSchema = z.object({
     .describe('Tres versiones distintas entre sí.'),
   missing: z
     .array(z.string())
-    .describe(
-      'Datos que le faltan a la persona para que el logro quede sólido, formulados como preguntas cortas. Lista vacía si no falta nada.',
-    ),
+    .describe('Datos que faltan para que el logro quede sólido, como preguntas cortas. Vacío si no falta nada.'),
 });
 
 const BULLET_SYSTEM = `Reescribes logros de currículum en español de Chile, siguiendo las reglas de redacción de CV: verbo de acción en pasado al inicio, qué hiciste, cómo, y el resultado medible.
@@ -246,14 +135,72 @@ Reglas estrictas:
 - Cada versión entre 90 y 200 caracteres.
 - Las tres versiones deben ser genuinamente distintas en enfoque, no la misma frase con sinónimos.`;
 
-export interface BulletSuggestion {
-  text: string;
-  note: string;
+/**
+ * Pide una respuesta estructurada al proveedor configurado. Claude va por su
+ * SDK oficial con salida estructurada nativa; el resto, por el transporte
+ * compatible con OpenAI.
+ */
+async function runStructured(
+  settings: AiSettings,
+  schema: z.ZodType,
+  system: string,
+  user: string,
+  maxTokens: number,
+): Promise<unknown> {
+  if (settings.provider !== 'anthropic') {
+    return callStructured(settings, schema, system, user, maxTokens);
+  }
+
+  const [{ createClient, describeAiError }, { zodOutputFormat }] = await Promise.all([
+    import('./client'),
+    import('@anthropic-ai/sdk/helpers/zod'),
+  ]);
+
+  try {
+    const client = await createClient(settings);
+    const message = await client.beta.messages.parse({
+      model: settings.model,
+      max_tokens: maxTokens,
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      system,
+      messages: [{ role: 'user', content: user }],
+      output_config: { format: zodOutputFormat(schema) },
+    });
+
+    if (message.stop_reason === 'refusal') {
+      throw new AiError('El modelo declinó procesar este texto. Usa el lector sin IA.');
+    }
+    if (!message.parsed_output) {
+      throw new AiError('La respuesta no vino en el formato esperado. Vuelve a intentar.');
+    }
+    return message.parsed_output;
+  } catch (error) {
+    if (error instanceof AiError) throw error;
+    throw new AiError(await describeAiError(error));
+  }
 }
 
-export interface BulletRewrite {
-  options: BulletSuggestion[];
-  missing: string[];
+/** Lee un CV y devuelve la misma estructura que el lector local. */
+export async function extractCvWithAi(text: string, settings: AiSettings): Promise<ParsedCv> {
+  const raw = await runStructured(settings, CvSchema, CV_SYSTEM, `Extrae los datos de este CV:\n\n${text}`, 16000);
+  const parsed = coerceCv(raw);
+
+  if (!parsed.personal.fullName && !parsed.experience.length) {
+    throw new AiError('El modelo respondió, pero no reconoció ningún dato. Prueba con otro modelo o sin IA.');
+  }
+  parsed.notes.unshift(`Leído con ${describeSettings(settings)}. Revísalo igual: la IA también se equivoca.`);
+  return parsed;
+}
+
+/** Lee un aviso de trabajo. */
+export async function extractJobWithAi(
+  text: string,
+  url: string,
+  settings: AiSettings,
+): Promise<ParsedJob & { contact: string }> {
+  const raw = await runStructured(settings, JobSchema, JOB_SYSTEM, `Extrae los datos de este aviso:\n\n${text}`, 4000);
+  return { ...coerceJob(raw), source: sourceFromUrl(url) };
 }
 
 /** Propone tres reescrituras de un logro, sin inventar datos. */
@@ -262,29 +209,11 @@ export async function rewriteBulletWithAi(
   context: { role: string; company: string },
   settings: AiSettings,
 ): Promise<BulletRewrite> {
-  try {
-    const client = await createClient(settings);
-    const message = await client.beta.messages.parse({
-      model: settings.model,
-      max_tokens: 4000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      system: BULLET_SYSTEM,
-      messages: [
-        {
-          role: 'user',
-          content: `Cargo: ${context.role || 'sin especificar'}\nEmpresa: ${context.company || 'sin especificar'}\n\nLogro a mejorar:\n${bullet}`,
-        },
-      ],
-      output_config: { format: zodOutputFormat(BulletSchema) },
-    });
-
-    if (message.stop_reason === 'refusal' || !message.parsed_output) {
-      throw new AiError('No se pudo generar la reescritura. Vuelve a intentar.');
-    }
-    return message.parsed_output;
-  } catch (error) {
-    if (error instanceof AiError) throw error;
-    throw new AiError(await describeAiError(error));
+  const user = `Cargo: ${context.role || 'sin especificar'}\nEmpresa: ${context.company || 'sin especificar'}\n\nLogro a mejorar:\n${bullet}`;
+  const raw = await runStructured(settings, BulletSchema, BULLET_SYSTEM, user, 4000);
+  const rewrite = coerceRewrite(raw);
+  if (!rewrite.options.length) {
+    throw new AiError('El modelo no devolvió ninguna propuesta. Vuelve a intentar.');
   }
+  return rewrite;
 }
