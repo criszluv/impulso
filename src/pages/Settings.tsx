@@ -35,6 +35,7 @@ export function Settings() {
       model: p.defaultModel,
       // La clave no se arrastra entre proveedores: cada uno tiene la suya.
       apiKey: '',
+      reader: ai.reader,
     });
     setTestResult(null);
     setLocalModels([]);
@@ -273,6 +274,19 @@ export function Settings() {
                 </div>
               </div>
             )}
+
+            <div className="field" style={{ marginTop: 18 }}>
+              <Toggle
+                label="Leer avisos de trabajo desde su enlace"
+                checked={preset.provider === 'anthropic' || ai.reader === 'jina'}
+                onChange={(v) => setAi({ ...ai, reader: v ? 'jina' : 'ninguno' })}
+              />
+              <span className="field-hint">
+                {preset.provider === 'anthropic'
+                  ? 'Con Claude viene incluido: la página la lee el servidor de Anthropic, que ya es tu proveedor, sin sumar a nadie más.'
+                  : 'Tu proveedor no puede abrir páginas, así que el enlace se manda a r.jina.ai, un servicio externo que devuelve el texto. Ojo: ese servicio ve a qué estás postulando. Tu CV y tus datos no salen; solo el enlace. Si prefieres evitarlo, déjalo apagado y pega el texto a mano.'}
+              </span>
+            </div>
 
             {isLocal ? (
               <div className="issue issue-ok" style={{ marginTop: 14 }}>

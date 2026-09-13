@@ -4,7 +4,8 @@ import { removeById, upsert } from '../lib/list';
 import type { CoverLetter } from '../types';
 import { uid, formatDate } from '../lib/utils';
 import { generateCoverLetter, relevantSkills } from '../lib/writing';
-import { isConfigured } from '../lib/ai/settings';
+import { matchJob } from '../lib/analysis';
+import { canReadLinks, isConfigured, readerName } from '../lib/ai/settings';
 import { AiError } from '../lib/ai/errors';
 import { LETTER_TONES } from '../lib/ai/types';
 import type { LetterTone } from '../lib/ai/types';
@@ -29,6 +30,7 @@ function newLetter(): CoverLetter {
     role: '',
     recipient: '',
     body: '',
+    jobDescription: '',
     applicationId: null,
     createdAt: now,
     updatedAt: now,
@@ -45,7 +47,10 @@ export function Letters() {
   const [writing, setWriting] = useState(false);
   const [aiError, setAiError] = useState('');
   const [gaps, setGaps] = useState<string[]>([]);
+  const [jobUrl, setJobUrl] = useState('');
+  const [fetching, setFetching] = useState(false);
   const aiReady = isConfigured(ai);
+  const canFetch = canReadLinks(ai);
 
   const letter = letters.find((l) => l.id === selectedId) ?? null;
 
@@ -61,10 +66,30 @@ export function Letters() {
   };
 
   const linkedApp = applications.find((a) => a.id === letter?.applicationId) ?? null;
+  const jobText = letter?.jobDescription?.trim() || linkedApp?.jobDescription?.trim() || '';
+  // Con un calce muy bajo, el modelo termina escribiendo una carta que
+  // descarta a la propia persona. Mejor avisar antes de gastar la llamada.
+  const match = jobText ? matchJob(jobText, profile) : null;
+  const poorMatch = Boolean(match && match.total > 5 && match.score < 25);
+
+  const readJobFromLink = async () => {
+    if (!letter) return;
+    setFetching(true);
+    setAiError('');
+    try {
+      const { fetchPageText } = await import('../lib/ai/pageText');
+      const text = await fetchPageText(jobUrl, ai);
+      patch({ jobDescription: text });
+    } catch (e) {
+      setAiError(e instanceof AiError ? e.message : 'No se pudo leer ese enlace.');
+    } finally {
+      setFetching(false);
+    }
+  };
 
   const generate = () => {
     if (!letter) return;
-    const keywords = relevantSkills(profile, linkedApp?.jobDescription ?? '');
+    const keywords = relevantSkills(profile, jobText);
     const body = generateCoverLetter({
       profile,
       company: letter.company,
@@ -94,7 +119,7 @@ export function Letters() {
           recipient: letter.recipient,
           source,
           motivation,
-          jobDescription: linkedApp?.jobDescription ?? '',
+          jobDescription: jobText,
           tone,
         },
         ai,
@@ -205,6 +230,7 @@ export function Letters() {
                           company: app?.company ?? letter.company,
                           role: app?.role ?? letter.role,
                           title: app ? `${app.role} · ${app.company}` : letter.title,
+                          jobDescription: app?.jobDescription || letter.jobDescription,
                         });
                       }}
                     >
@@ -243,6 +269,74 @@ export function Letters() {
                     hint="El párrafo que no se puede automatizar. Algo real: un producto que usas, una noticia que leíste, alguien que trabaja ahí."
                   />
                 </div>
+                <div style={{ marginTop: 18 }}>
+                  <div className="field-label" style={{ marginBottom: 6 }}>
+                    El aviso al que postulas
+                  </div>
+                  <p className="field-hint" style={{ marginBottom: 10 }}>
+                    Es lo que separa una carta genérica de una escrita para ese cargo: la IA elige
+                    los logros de tu perfil que calzan con lo que pide el aviso.
+                  </p>
+
+                  {canFetch && (
+                    <div className="row" style={{ flexWrap: 'nowrap', gap: 8, marginBottom: 10 }}>
+                      <input
+                        className="input"
+                        value={jobUrl}
+                        onChange={(e) => setJobUrl(e.target.value)}
+                        placeholder="Pega el enlace del aviso…"
+                      />
+                      <Button disabled={!jobUrl.trim() || fetching} onClick={() => void readJobFromLink()}>
+                        {fetching ? 'Leyendo…' : 'Leer enlace'}
+                      </Button>
+                    </div>
+                  )}
+
+                  <TextArea
+                    label={canFetch ? 'O pega el texto del aviso' : 'Texto del aviso'}
+                    rows={6}
+                    value={letter.jobDescription}
+                    onChange={(e) => patch({ jobDescription: e.target.value })}
+                    placeholder={
+                      linkedApp?.jobDescription
+                        ? 'Se está usando el aviso de la postulación vinculada. Pega algo aquí para reemplazarlo.'
+                        : 'Copia el aviso completo y pégalo aquí…'
+                    }
+                    hint={
+                      canFetch
+                        ? `El enlace se lee con ${readerName(ai)}.`
+                        : 'Para leer directamente desde un enlace, activa esa opción en Ajustes.'
+                    }
+                  />
+
+                  {!jobText && (
+                    <div className="issue issue-warn" style={{ marginTop: 10 }}>
+                      <span className="issue-icon">!</span>
+                      <div>
+                        <strong>Sin el aviso, la carta sale genérica</strong>
+                        <p>
+                          Con solo el cargo y la empresa, la IA no sabe qué pide el puesto y escribe
+                          en abstracto. Pega el aviso o léelo desde su enlace.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {poorMatch && (
+                    <div className="issue issue-warn" style={{ marginTop: 10 }}>
+                      <span className="issue-icon">!</span>
+                      <div>
+                        <strong>Tu perfil calza poco con este aviso ({match?.score}%)</strong>
+                        <p>
+                          La carta se va a apoyar en lo transferible, que es poco cuando el rubro es
+                          otro. Si de verdad te interesa el cargo, primero conviene reforzar el
+                          perfil con lo que pide el aviso. Puedes generarla igual.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {aiReady && (
                   <div style={{ marginTop: 16 }}>
                     <div className="field-label" style={{ marginBottom: 8 }}>
@@ -270,12 +364,6 @@ export function Letters() {
                         </button>
                       ))}
                     </div>
-                    {!linkedApp?.jobDescription && (
-                      <p className="field-hint" style={{ marginTop: 8 }}>
-                        Vincula esta carta a una postulación que tenga el aviso pegado y la carta se
-                        escribirá cruzando tu perfil con lo que pide ese cargo.
-                      </p>
-                    )}
                   </div>
                 )}
 

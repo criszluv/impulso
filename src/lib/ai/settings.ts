@@ -20,6 +20,12 @@ export interface AiSettings {
   apiKey: string;
   model: string;
   baseUrl: string;
+  /**
+   * Servicio externo que convierte una página en texto, para poder leer un
+   * aviso desde su enlace sin Claude. Apagado por defecto: implica mandarle el
+   * enlace a un tercero.
+   */
+  reader: 'ninguno' | 'jina';
 }
 
 export interface AiPreset {
@@ -135,6 +141,7 @@ export const emptyAiSettings: AiSettings = {
   apiKey: '',
   model: '',
   baseUrl: '',
+  reader: 'ninguno',
 };
 
 export function presetById(id: string): AiPreset | undefined {
@@ -168,6 +175,7 @@ export function loadAiSettings(): AiSettings {
       apiKey: typeof parsed.apiKey === 'string' ? parsed.apiKey : '',
       model: typeof parsed.model === 'string' ? parsed.model : '',
       baseUrl: typeof parsed.baseUrl === 'string' ? parsed.baseUrl : '',
+      reader: parsed.reader === 'jina' ? 'jina' : 'ninguno',
     };
   } catch {
     return emptyAiSettings;
@@ -197,4 +205,16 @@ export async function listOllamaModels(baseUrl: string): Promise<string[]> {
   if (!response.ok) throw new Error(`Ollama respondió ${response.status}`);
   const data = (await response.json()) as { models?: Array<{ name?: string }> };
   return (data.models ?? []).map((m) => m.name ?? '').filter(Boolean);
+}
+
+/** Claude trae fetch propio del lado del servidor; el resto necesita el lector externo. */
+export function canReadLinks(settings: AiSettings): boolean {
+  return isConfigured(settings) && (settings.provider === 'anthropic' || settings.reader !== 'ninguno');
+}
+
+/** De dónde saldría el texto de una página, para poder decírselo a la persona. */
+export function readerName(settings: AiSettings): string {
+  if (settings.provider === 'anthropic') return 'el servidor de Anthropic';
+  if (settings.reader === 'jina') return 'r.jina.ai';
+  return '';
 }

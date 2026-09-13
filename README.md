@@ -40,7 +40,8 @@ para cuatro cosas:
   cookies que vienen pegados de una web se descartan solos.
 - **Leer un aviso de trabajo**, pegado o —con Claude— directamente desde su enlace.
 - **Escribir la carta de presentación** cruzando tu perfil con el aviso al que postulas, en el tono
-  que elijas: directo, formal, cercano o muy breve.
+  que elijas: directo, formal, cercano o muy breve. El aviso se pega en la propia carta o se lee
+  desde su enlace; no hace falta crear antes una postulación.
 - **Reescribir un logro** del CV: propone tres versiones y, si al logro le falta una cifra, la
   pide en vez de inventarla.
 
@@ -58,10 +59,28 @@ medidas, en orden de fiabilidad:
 
 ### Leer un aviso desde su enlace
 
-Solo con Claude, que es el único de los proveedores soportados con una herramienta de fetch del
-lado del servidor. No funciona en todas partes: los sitios que arman la página con JavaScript o
-piden sesión iniciada —LinkedIn entre ellos— no se dejan leer, y ahí la app te dice que pegues el
-texto. **Esta parte no está probada de punta a punta**, porque requiere una clave de Anthropic.
+Un navegador no puede abrir la página de un portal de empleo: se lo impide la política de orígenes.
+Quedan dos vías, y en las dos alguien más ve el enlace, así que la app lo dice antes:
+
+- **Con Claude** viene incluido: la página la lee el servidor de Anthropic, que ya es tu proveedor,
+  sin sumar a nadie más. *(No probado de punta a punta: requiere una clave de Anthropic.)*
+- **Con cualquier otro proveedor**, incluido un modelo local, se puede activar un lector externo
+  (`r.jina.ai`) que convierte la página en texto. Viene **apagado**: ese servicio ve a qué estás
+  postulando. Tu CV y tus datos no salen, solo el enlace.
+
+No funciona en todas partes: los sitios que arman la página con JavaScript o piden sesión iniciada
+—LinkedIn entre ellos— no se dejan leer, y ahí la app te dice que pegues el texto.
+
+Probado con un aviso real de Get on Board: 4 segundos en leer la página, 10 en extraer los campos, y
+salieron correctos el cargo, la empresa, la modalidad y el rango de sueldo.
+
+### Cuando tu perfil no calza con el aviso
+
+Si el calce con el aviso baja del 25%, la app avisa **antes** de escribir. La razón es concreta:
+probando con un perfil de logística contra un aviso de desarrollo backend, el modelo —cumpliendo la
+regla de no inventar— escribió una carta que empezaba «no calzo para este puesto». Honesto e
+inservible. Ahora el prompt le prohíbe evaluar la candidatura (eso lo decide quien contrata) y la
+app te deja decidir si igual quieres escribirla.
 
 ### Con qué se puede conectar
 

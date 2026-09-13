@@ -5,7 +5,7 @@ import type { Application, ApplicationStatus } from '../types';
 import { daysSince, formatDate, uid } from '../lib/utils';
 import { matchJob } from '../lib/analysis';
 import { parseJobPosting, sourceFromUrl } from '../lib/import/parseJob';
-import { isConfigured } from '../lib/ai/settings';
+import { canReadLinks, isConfigured, readerName } from '../lib/ai/settings';
 import { AiError } from '../lib/ai/errors';
 import {
   Button,
@@ -61,9 +61,7 @@ export function Applications() {
   const [readNotes, setReadNotes] = useState<string[]>([]);
   const [reading, setReading] = useState(false);
   const aiReady = isConfigured(ai);
-  // Leer desde el enlace necesita una herramienta de fetch del lado del
-  // servidor, y de los proveedores soportados solo Claude la tiene.
-  const canFetchLinks = aiReady && ai.provider === 'anthropic';
+  const canFetchLinks = canReadLinks(ai);
 
   const selected = applications.find((a) => a.id === selectedId) ?? null;
 
@@ -106,8 +104,8 @@ export function Applications() {
 
     if (fromLink) {
       try {
-        const { fetchJobTextFromUrl } = await import('../lib/ai/extract');
-        text = await fetchJobTextFromUrl(jobUrl.trim(), ai);
+        const { fetchPageText } = await import('../lib/ai/pageText');
+        text = await fetchPageText(jobUrl, ai);
         setJobText(text);
       } catch (e) {
         setReading(false);
@@ -217,8 +215,8 @@ export function Applications() {
               </strong>
               <p>
                 {canFetchLinks
-                  ? 'Con Claude configurado, el aviso lo lee el servidor de Anthropic y te lo trae. No funciona en todas partes: los sitios que arman la página con JavaScript o piden sesión iniciada (LinkedIn, por ejemplo) no se dejan leer. Si falla, abre el enlace y pega el texto, que siempre funciona.'
-                  : 'Impulso corre entero en tu navegador y los portales bloquean que otra página lea sus avisos. Pasarlos por un servidor intermedio significaría contarle a un tercero a qué postulas. Copiar y pegar toma cinco segundos, y ese texto es justo lo que necesita el comparador con tu CV. Con Claude configurado aparece además un botón para leer el enlace directo.'}
+                  ? `El aviso lo lee ${readerName(ai)} y te trae el texto. No funciona en todas partes: los sitios que arman la página con JavaScript o piden sesión iniciada —LinkedIn entre ellos— no se dejan leer. Si falla, abre el enlace y pega el texto, que siempre funciona.`
+                  : 'Impulso corre entero en tu navegador y los portales bloquean que otra página lea sus avisos. Para leer desde el enlace hace falta Claude, que trae su propio lector, o activar el lector de páginas en Ajustes. Pegar el texto siempre funciona y no depende de nadie.'}
               </p>
             </div>
           </div>

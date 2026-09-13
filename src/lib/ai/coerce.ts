@@ -168,14 +168,23 @@ export function coerceCv(raw: unknown): ParsedCv {
 
 export function coerceJob(raw: unknown): ParsedJob & { contact: string } {
   const data = asObject(raw);
+  const contact = str(data.contact);
   return {
     role: str(data.role),
     company: str(data.company),
     location: str(data.location),
     salary: str(data.salary),
-    contact: str(data.contact),
+    // Algunos modelos ponen ahí la dirección del propio aviso, que no es un contacto.
+    contact: /^https?:\/\//i.test(contact) ? '' : contact,
     source: '',
-    notes: strings(data.notes),
+    /*
+     * Tope deliberado. Un modelo chico entiende «avisos» como «cuéntame el
+     * aviso» y devuelve la publicación entera troceada: se vio pasar con 40
+     * entradas. Los avisos útiles son cortos y son pocos.
+     */
+    notes: strings(data.notes)
+      .filter((n) => n.length <= 160)
+      .slice(0, 3),
   };
 }
 

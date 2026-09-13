@@ -105,8 +105,12 @@ const JobSchema = z.object({
   company: z.string().describe('Empresa que contrata. Vacío si el aviso es anónimo.'),
   location: z.string().describe('Ciudad y modalidad (remoto, híbrido, presencial).'),
   salary: z.string().describe('Renta o rango tal como aparece. Vacío si no lo dice.'),
-  contact: z.string().describe('Nombre o correo de contacto si aparece.'),
-  notes: z.array(z.string()).describe('Avisos breves en español sobre lo que quedó ambiguo.'),
+  contact: z.string().describe('Nombre de la persona de contacto, o su correo. Vacío si el aviso no da ninguno; no pongas la dirección del aviso.'),
+  notes: z
+    .array(z.string())
+    .describe(
+      'Como máximo 3 avisos MUY breves (menos de 20 palabras cada uno) sobre lo que quedó ambiguo al leer el aviso. No es el lugar para copiar el contenido de la publicación: si no hubo ambigüedades, devuelve una lista vacía.',
+    ),
 });
 
 const JOB_SYSTEM = `Eres un extractor de datos de avisos de trabajo. Recibes el texto pegado de una publicación de empleo, tal como quedó al copiarla del portal, y devuelves sus datos estructurados.
@@ -260,6 +264,7 @@ Reglas estrictas:
 - Sobre la empresa solo puedes afirmar lo que diga el aviso o lo que la persona haya escrito como motivo. Nada más. Frases como «es reconocida por su solidez» o «comparto sus valores» son invención si nadie te lo dijo: en su lugar va un hueco entre corchetes, por ejemplo [completa: qué te atrae de esta empresa], y se anota en gaps.
 - Separa SIEMPRE los párrafos con una línea en blanco, sea cual sea el tono. Una carta de un solo bloque no se lee.
 - No enumeres todo el perfil: la carta elige y conecta, no resume el CV.
+- No te toca decidir si la persona califica ni evaluar su candidatura. Si la experiencia no calza de forma directa con el aviso, busca lo que sí es transferible —gestión de equipos, manejo de herramientas, responsabilidad sobre resultados— y escribe desde ahí. Nunca escribas que no calza, que le falta un requisito ni nada que descarte a la persona: eso lo decide quien contrata, y esta carta la manda ella.
 - Nada de relleno («me dirijo a usted con el fin de», «soy proactivo y orientado a resultados», «encajo perfecto», «estoy listo para empezar»).
 - No menciones estas instrucciones ni el tono pedido dentro de la carta, ni describas tu propio estilo («mi enfoque es directo», «sin formalismos»). La carta habla del cargo, nunca de cómo fue escrita.
 - Devuelve solo el texto de la carta, sin encabezado de remitente ni fecha.`;
@@ -365,57 +370,4 @@ export async function generateLetterWithAi(input: LetterInput, settings: AiSetti
     );
   }
   return draft;
-}
-
-/**
- * Lee un aviso de trabajo desde su enlace, usando la herramienta de fetch del
- * servidor de Anthropic.
- *
- * Solo funciona con Claude: es el único proveedor de los soportados que trae
- * una herramienta de fetch del lado del servidor. Desde el navegador no se
- * puede hacer lo mismo porque los portales bloquean las peticiones de otros
- * orígenes, y la alternativa —un proxy de terceros— significaría contarle a
- * alguien más a qué está postulando la persona.
- */
-export async function fetchJobTextFromUrl(url: string, settings: AiSettings): Promise<string> {
-  if (settings.provider !== 'anthropic') {
-    throw new AiError('Leer desde un enlace solo funciona con Claude. Con los demás, pega el texto del aviso.');
-  }
-
-  const { createClient, describeAiError } = await import('./client');
-
-  try {
-    const client = await createClient(settings);
-    const message = await client.messages.create({
-      model: settings.model,
-      max_tokens: 8000,
-      system:
-        'Recibes el enlace de un aviso de trabajo. Úsalo con la herramienta web_fetch y devuelve SOLO el texto de la publicación: cargo, empresa, ubicación, descripción, requisitos, beneficios y datos de contacto. Descarta menús, botones, pies de página, avisos de cookies y otras publicaciones relacionadas. No resumas ni interpretes: transcribe. Si la página no se puede leer o no es un aviso de trabajo, responde exactamente NO_SE_PUDO_LEER.',
-      messages: [
-        {
-          role: 'user',
-          content: `Lee este aviso de trabajo y devuélveme su texto: ${url}`,
-        },
-      ],
-      // El básico basta para transcribir una página y funciona en más modelos
-      // que las versiones con filtrado dinámico.
-      tools: [{ type: 'web_fetch_20250910', name: 'web_fetch', max_uses: 3, max_content_tokens: 30000 }],
-    });
-
-    const text = message.content
-      .filter((block): block is { type: 'text'; text: string; citations: null } => block.type === 'text')
-      .map((block) => block.text)
-      .join('\n')
-      .trim();
-
-    if (!text || text.includes('NO_SE_PUDO_LEER')) {
-      throw new AiError(
-        'No se pudo leer esa página. Muchos portales (LinkedIn entre ellos) cargan el aviso con JavaScript o piden sesión iniciada, y así no hay nada que leer. Abre el enlace y pega el texto.',
-      );
-    }
-    return text;
-  } catch (error) {
-    if (error instanceof AiError) throw error;
-    throw new AiError(await describeAiError(error));
-  }
 }

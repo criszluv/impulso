@@ -128,6 +128,8 @@ export interface CoverLetter {
   role: string;
   recipient: string;
   body: string;
+  /** Texto del aviso al que se postula. La carta puede tenerlo aunque no haya postulación. */
+  jobDescription: string;
   applicationId: Id | null;
   createdAt: string;
   updatedAt: string;
