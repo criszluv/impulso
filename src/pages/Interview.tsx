@@ -4,7 +4,16 @@ import { removeById, upsert } from '../lib/list';
 import type { StarAnswer } from '../types';
 import { uid } from '../lib/utils';
 import { INTERVIEW_QUESTIONS, QUESTIONS_TO_ASK } from '../lib/writing';
-import { Badge, Button, Card, ConfirmButton, CopyButton, Empty, TextArea, TextInput } from '../components/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  ConfirmButton,
+  CopyButton,
+  Empty,
+  TextArea,
+  TextInput,
+} from '../components/ui';
 
 function starText(a: StarAnswer): string {
   return [
@@ -23,7 +32,14 @@ export function Interview() {
   const [openId, setOpenId] = useState<string | null>(null);
 
   const addAnswer = (question: string) => {
-    const a: StarAnswer = { id: uid('star'), question, situation: '', task: '', action: '', result: '' };
+    const a: StarAnswer = {
+      id: uid('star'),
+      question,
+      situation: '',
+      task: '',
+      action: '',
+      result: '',
+    };
     setAnswers([a, ...answers]);
     setOpenId(a.id);
   };
@@ -40,17 +56,17 @@ export function Interview() {
     <>
       <div className="page-head">
         <div>
-          <h1>Preparación de entrevistas</h1>
+          <h1>Mi próxima entrevista</h1>
           <p>
-            Las respuestas se improvisan mal. Escribe las cuatro o cinco historias que puedes contar
-            y vas a poder adaptarlas a casi cualquier pregunta.
+            Practica con tranquilidad. Elige una pregunta y prepara una respuesta con ejemplos de tu
+            propia experiencia.
           </p>
         </div>
       </div>
 
       <Card
         title="Tus respuestas"
-        subtitle="Método STAR: Situación, Tarea, Acción, Resultado. La Acción es la parte que más pesa."
+        subtitle="Cuenta qué pasaba, qué necesitabas hacer, qué hiciste y cómo terminó."
         actions={
           <Button size="sm" variant="primary" onClick={() => addAnswer('')}>
             + Respuesta en blanco
@@ -69,14 +85,24 @@ export function Interview() {
             return (
               <div className="item" key={a.id}>
                 <div className="item-head">
-                  <Button size="sm" variant="ghost" onClick={() => setOpenId(open ? null : a.id)}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label={open ? 'Cerrar respuesta' : 'Editar respuesta'}
+                    aria-expanded={open}
+                    onClick={() => setOpenId(open ? null : a.id)}
+                  >
                     {open ? '▾' : '▸'}
                   </Button>
                   <h3>{a.question || 'Pregunta sin título'}</h3>
-                  <Badge tone={filled === 4 ? 'good' : filled > 0 ? 'warn' : 'neutral'}>{filled}/4</Badge>
+                  <Badge tone={filled === 4 ? 'good' : filled > 0 ? 'warn' : 'neutral'}>
+                    {filled}/4
+                  </Badge>
                   <span className="spacer" />
                   <CopyButton text={`${a.question}\n\n${starText(a)}`} label="Copiar" />
-                  <ConfirmButton onConfirm={() => setAnswers(removeById(answers, a.id))}>Eliminar</ConfirmButton>
+                  <ConfirmButton onConfirm={() => setAnswers(removeById(answers, a.id))}>
+                    Eliminar
+                  </ConfirmButton>
                 </div>
                 {open && (
                   <div className="item-body">
@@ -87,28 +113,28 @@ export function Interview() {
                         onChange={(e) => patch(a.id, { question: e.target.value })}
                       />
                       <TextArea
-                        label="Situación"
+                        label="¿Qué pasaba?"
                         rows={2}
                         value={a.situation}
                         onChange={(e) => patch(a.id, { situation: e.target.value })}
                         hint="Dónde y cuándo. Dos frases bastan."
                       />
                       <TextArea
-                        label="Tarea"
+                        label="¿Qué necesitabas hacer?"
                         rows={2}
                         value={a.task}
                         onChange={(e) => patch(a.id, { task: e.target.value })}
                         hint="Qué había que lograr y por qué era difícil."
                       />
                       <TextArea
-                        label="Acción"
+                        label="¿Qué hiciste tú?"
                         rows={3}
                         value={a.action}
                         onChange={(e) => patch(a.id, { action: e.target.value })}
                         hint="Lo que hiciste tú. Habla en primera persona singular, no en «nosotros»."
                       />
                       <TextArea
-                        label="Resultado"
+                        label="¿Cómo terminó?"
                         rows={2}
                         value={a.result}
                         onChange={(e) => patch(a.id, { result: e.target.value })}
@@ -123,7 +149,10 @@ export function Interview() {
         )}
       </Card>
 
-      <Card title="Banco de preguntas" subtitle="Las que más se repiten, con el criterio detrás de cada una.">
+      <Card
+        title="Banco de preguntas"
+        subtitle="Las que más se repiten, con el criterio detrás de cada una."
+      >
         <div className="stack" style={{ gap: 8 }}>
           {INTERVIEW_QUESTIONS.map((q) => (
             <div className="item" key={q.question} style={{ marginBottom: 0 }}>

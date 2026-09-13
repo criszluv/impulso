@@ -1,490 +1,557 @@
-import { useMemo, useState } from 'react';
-import { useApp } from '../state/context';
-import { removeById, upsert } from '../lib/list';
-import type { Application, ApplicationStatus } from '../types';
-import { daysSince, formatDate, uid } from '../lib/utils';
-import { matchJob } from '../lib/analysis';
-import { parseJobPosting, sourceFromUrl } from '../lib/import/parseJob';
-import { canReadLinks, isConfigured, readerName } from '../lib/ai/settings';
-import { AiError } from '../lib/ai/errors';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
-  Button,
-  Card,
-  ConfirmButton,
-  Empty,
-  ScoreRing,
-  Select,
-  TextArea,
-  TextInput,
-} from '../components/ui';
+  ArrowLeft,
+  ArrowRight,
+  Plus,
+  Bookmark,
+  ExternalLink,
+  CalendarDays,
+  Check,
+  Mail,
+} from 'lucide-react';
+import { useApp } from '../state/context';
+import type { Application, ApplicationStatus } from '../types';
+import { uid, formatDate, download } from '../lib/utils';
+import {
+  applicationMessage,
+  calendarFile,
+  localDate,
+  safeUrl,
+  STATUS_LABELS,
+} from '../lib/journey';
+import { parseJobPosting } from '../lib/import/parseJob';
+import { TextInput, TextArea, Select, Button, ConfirmButton, CopyButton } from '../components/ui';
+import { JobReview } from '../components/JobReview';
+import { DownloadCv } from '../components/DownloadCv';
 
-const COLUMNS: Array<{ id: ApplicationStatus; label: string; hint: string }> = [
-  { id: 'guardada', label: 'Guardada', hint: 'Te interesa, pero todavía no la envías.' },
-  { id: 'postulada', label: 'Postulada', hint: 'Ya enviaste el CV. Esperando respuesta.' },
-  { id: 'entrevista', label: 'Entrevista', hint: 'Te contactaron y hay proceso en curso.' },
-  { id: 'oferta', label: 'Oferta', hint: 'Llegó una propuesta concreta.' },
-  { id: 'rechazada', label: 'Cerrada', hint: 'Te dijeron que no, o decidiste bajarte.' },
-];
-
-function newApplication(patch: Partial<Application> = {}): Application {
-  const now = new Date().toISOString();
-  return {
-    id: uid('app'),
-    company: '',
-    role: '',
-    location: '',
-    url: '',
-    source: '',
-    salary: '',
-    status: 'guardada',
-    appliedAt: '',
-    nextStep: '',
-    nextStepDate: '',
-    contact: '',
-    notes: '',
-    jobDescription: '',
-    createdAt: now,
-    updatedAt: now,
-    ...patch,
-  };
-}
-
+const empty = (): Application => ({
+  id: uid('app'),
+  company: '',
+  role: '',
+  location: '',
+  url: '',
+  source: '',
+  salary: '',
+  status: 'guardada',
+  appliedAt: '',
+  nextStep: '',
+  nextStepDate: '',
+  contact: '',
+  notes: '',
+  jobDescription: '',
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+});
 export function Applications() {
-  const { state, setApplications, ai } = useApp();
-  const { applications, profile } = state;
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [dragOver, setDragOver] = useState<ApplicationStatus | null>(null);
-  const [query, setQuery] = useState('');
-  const [adding, setAdding] = useState(false);
-  const [jobUrl, setJobUrl] = useState('');
-  const [jobText, setJobText] = useState('');
-  const [readNotes, setReadNotes] = useState<string[]>([]);
-  const [reading, setReading] = useState(false);
-  const aiReady = isConfigured(ai);
-  const canFetchLinks = canReadLinks(ai);
-
-  const selected = applications.find((a) => a.id === selectedId) ?? null;
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return applications;
-    return applications.filter((a) =>
-      `${a.company} ${a.role} ${a.location} ${a.notes}`.toLowerCase().includes(q),
-    );
-  }, [applications, query]);
-
-  const patch = (id: string, p: Partial<Application>) => {
-    const app = applications.find((a) => a.id === id);
-    if (!app) return;
-    setApplications(upsert(applications, { ...app, ...p, updatedAt: new Date().toISOString() }));
-  };
-
-  const moveTo = (id: string, status: ApplicationStatus) => {
-    const extra: Partial<Application> = { status };
-    const app = applications.find((a) => a.id === id);
-    if (status === 'postulada' && app && !app.appliedAt) {
-      extra.appliedAt = new Date().toISOString().slice(0, 10);
-    }
-    patch(id, extra);
-  };
-
-  const createBlank = () => {
-    const a = newApplication();
-    setApplications([a, ...applications]);
-    setSelectedId(a.id);
-    setAdding(false);
-  };
-
-  const createFromPosting = async (withAi: boolean, fromLink = false) => {
-    setReading(true);
-    let text = jobText;
-    let fields = parseJobPosting(jobText, jobUrl);
-    let contact = '';
-    const extraNotes: string[] = [];
-
-    if (fromLink) {
-      try {
-        const { fetchPageText } = await import('../lib/ai/pageText');
-        text = await fetchPageText(jobUrl, ai);
-        setJobText(text);
-      } catch (e) {
-        setReading(false);
-        setReadNotes([e instanceof AiError ? e.message : 'No se pudo leer ese enlace.']);
-        return;
-      }
-    }
-
-    if (withAi && text.trim()) {
-      try {
-        const { extractJobWithAi } = await import('../lib/ai/extract');
-        const read = await extractJobWithAi(text, jobUrl, ai);
-        fields = read;
-        contact = read.contact;
-      } catch (e) {
-        extraNotes.push(
-          e instanceof AiError ? `${e.message} Se usó el lector sin IA.` : 'Falló la lectura con IA.',
-        );
-        fields = parseJobPosting(text, jobUrl);
-      }
-    } else if (fromLink) {
-      fields = parseJobPosting(text, jobUrl);
-    }
-    fields.notes = [...extraNotes, ...fields.notes];
-
-    const a = newApplication({
-      role: fields.role,
-      company: fields.company,
-      location: fields.location,
-      salary: fields.salary,
-      contact,
-      source: fields.source || sourceFromUrl(jobUrl),
-      url: jobUrl.trim(),
-      jobDescription: text.trim(),
+  const { state, apply } = useApp();
+  const [params, setParams] = useSearchParams();
+  const [adding, setAdding] = useState(params.has('nueva')),
+    [draft, setDraft] = useState(empty),
+    [error, setError] = useState('');
+  const [filter, setFilter] = useState('todas'),
+    [search, setSearch] = useState(''),
+    [pendingSend, setPendingSend] = useState<string | null>(null),
+    [recipient, setRecipient] = useState(''),
+    [deleted, setDeleted] = useState<Application | null>(null),
+    [readNote, setReadNote] = useState('');
+  const selected = state.applications.find((a) => a.id === params.get('ver'));
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    titleRef.current?.focus();
+  }, [selected?.id]);
+  const patch = (id: string, fields: Partial<Application>) =>
+    apply((s) => ({
+      ...s,
+      applications: s.applications.map((a) =>
+        a.id === id ? { ...a, ...fields, updatedAt: new Date().toISOString() } : a,
+      ),
+    }));
+  const changeStatus = (a: Application, status: ApplicationStatus) =>
+    patch(a.id, {
+      status,
+      ...(status === 'postulada' && !a.appliedAt ? { appliedAt: localDate() } : {}),
     });
-    setApplications([a, ...applications]);
-    setSelectedId(a.id);
-    setReadNotes(fields.notes);
+  const create = () => {
+    if (!draft.role.trim()) {
+      setError('Escribe el nombre del trabajo que te interesa.');
+      return;
+    }
+    if (draft.url && !safeUrl(draft.url)) {
+      setError('El enlace debe comenzar con https:// o http://. También puedes dejarlo vacío.');
+      return;
+    }
+    apply((s) => ({ ...s, applications: [draft, ...s.applications] }));
+    setParams({ ver: draft.id });
     setAdding(false);
-    setReading(false);
-    setJobUrl('');
-    setJobText('');
+    setDraft(empty());
+    setError('');
   };
-
-  const match = selected?.jobDescription ? matchJob(selected.jobDescription, profile) : null;
-
+  const readPosting = () => {
+    const fields = parseJobPosting(draft.jobDescription, draft.url);
+    setDraft((d) => ({
+      ...d,
+      role: fields.role || d.role,
+      company: fields.company || d.company,
+      location: fields.location || d.location,
+      salary: fields.salary || d.salary,
+      source: fields.source || d.source,
+    }));
+    setReadNote(
+      'Revisa los datos: la lectura puede equivocarse. Corrige lo que haga falta antes de guardar.',
+    );
+  };
+  const list = state.applications.filter(
+    (a) =>
+      (filter === 'todas' || a.status === filter) &&
+      [a.company, a.role, a.location]
+        .join(' ')
+        .toLocaleLowerCase()
+        .includes(search.toLocaleLowerCase()),
+  );
+  const link = selected ? safeUrl(selected.url) : null;
+  const message = selected ? applicationMessage(selected, state.profile) : '';
   return (
     <>
       <div className="page-head">
         <div>
-          <h1>Postulaciones</h1>
-          <p>
-            Es el registro de cada trabajo al que postulaste: en qué estado va, qué sigue y cuándo.
-            Sirve para dos cosas concretas: que ninguna oportunidad se enfríe por olvido, y ver en
-            qué parte del proceso se está cayendo tu búsqueda.
-          </p>
+          <span className="eyebrow">Que ninguna se te olvide</span>
+          <h1>Mis postulaciones</h1>
+          <p>Guarda las oportunidades que te interesan y anota lo que va pasando.</p>
         </div>
-        <div className="head-actions">
-          {applications.length > 0 && (
-            <input
-              className="input"
-              style={{ width: 180 }}
-              placeholder="Buscar…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          )}
-          <Button variant="primary" onClick={() => setAdding((v) => !v)}>
-            {adding ? 'Cerrar' : '+ Agregar desde un aviso'}
+        <Button
+          variant="primary"
+          onClick={() => {
+            setAdding(true);
+            setParams({ nueva: '1' });
+          }}
+        >
+          <Plus size={18} />
+          Guardar un aviso
+        </Button>
+      </div>
+      {deleted && (
+        <div role="status" className="notice">
+          Aviso eliminado.{' '}
+          <Button
+            onClick={() => {
+              apply((s) => ({ ...s, applications: [deleted, ...s.applications] }));
+              setDeleted(null);
+            }}
+          >
+            Deshacer
           </Button>
         </div>
-      </div>
-
-      {adding && (
-        <Card
-          title="Pega el aviso"
-          subtitle="Se llenan solos el cargo, la empresa, la ubicación y el sueldo, y el texto queda guardado para comparar con tu CV."
-          actions={
-            <Button size="sm" variant="ghost" onClick={createBlank}>
-              Prefiero llenarlo a mano
-            </Button>
-          }
-        >
-          <div className="grid">
-            <TextInput
-              label="Enlace del aviso"
-              wide
-              value={jobUrl}
-              onChange={(e) => setJobUrl(e.target.value)}
-              placeholder="https://www.linkedin.com/jobs/view/..."
-              hint="Se guarda para que lo abras con un clic más adelante."
-            />
-            <TextArea
-              label="Texto del aviso"
-              rows={9}
-              value={jobText}
-              onChange={(e) => setJobText(e.target.value)}
-              placeholder="Abre el aviso, selecciona todo el texto de la publicación y pégalo aquí…"
-            />
-          </div>
-
-          <div className="issue issue-tip" style={{ marginTop: 12 }}>
-            <span className="issue-icon">i</span>
-            <div>
-              <strong>
-                {canFetchLinks ? 'Sobre leer desde el enlace' : '¿Por qué hay que pegar el texto?'}
-              </strong>
-              <p>
-                {canFetchLinks
-                  ? `El aviso lo lee ${readerName(ai)} y te trae el texto. No funciona en todas partes: los sitios que arman la página con JavaScript o piden sesión iniciada —LinkedIn entre ellos— no se dejan leer. Si falla, abre el enlace y pega el texto, que siempre funciona.`
-                  : 'Impulso corre entero en tu navegador y los portales bloquean que otra página lea sus avisos. Para leer desde el enlace hace falta Claude, que trae su propio lector, o activar el lector de páginas en Ajustes. Pegar el texto siempre funciona y no depende de nadie.'}
+      )}
+      {adding ? (
+        <section className="form-sheet">
+          <h2>¿Qué trabajo te interesa?</h2>
+          <p>
+            Guardar el aviso te permite volver a él. La postulación se envía después, en la página
+            de la empresa o por correo.
+          </p>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              create();
+            }}
+          >
+            <div className="grid-2">
+              <TextInput
+                label="Nombre del trabajo"
+                value={draft.role}
+                onChange={(e) => setDraft({ ...draft, role: e.target.value })}
+                placeholder="Por ejemplo: auxiliar de cocina"
+              />
+              <TextInput
+                label="Empresa (si aparece)"
+                value={draft.company}
+                onChange={(e) => setDraft({ ...draft, company: e.target.value })}
+              />
+              <TextInput
+                label="Enlace del aviso (opcional)"
+                value={draft.url}
+                onChange={(e) => setDraft({ ...draft, url: e.target.value })}
+                placeholder="https://…"
+                hint="Pega la dirección de la página donde encontraste el trabajo."
+              />
+              <TextInput
+                label="Comuna o ciudad (si aparece)"
+                value={draft.location}
+                onChange={(e) => setDraft({ ...draft, location: e.target.value })}
+              />
+            </div>
+            <details>
+              <summary>Tengo el texto del aviso: ayudarme a completar los datos</summary>
+              <TextArea
+                label="Texto del aviso"
+                rows={6}
+                value={draft.jobDescription}
+                onChange={(e) => setDraft({ ...draft, jobDescription: e.target.value })}
+                hint="Selecciona el texto en la otra página, cópialo y pégalo aquí."
+              />
+              <Button type="button" disabled={!draft.jobDescription.trim()} onClick={readPosting}>
+                Completar con este texto
+              </Button>
+              {readNote && <p role="status">{readNote}</p>}
+            </details>
+            {error && (
+              <p className="error-text" role="alert">
+                {error}
               </p>
-            </div>
-          </div>
-
-          <div className="row" style={{ marginTop: 14 }}>
-            {canFetchLinks && (
+            )}
+            <div className="row">
+              <Button type="submit" variant="primary">
+                Guardar aviso
+                <Check size={18} />
+              </Button>
               <Button
-                variant="primary"
-                disabled={!jobUrl.trim() || reading}
-                onClick={() => void createFromPosting(true, true)}
-              >
-                {reading ? 'Leyendo…' : '✦ Leer desde el enlace'}
-              </Button>
-            )}
-            <Button
-              variant={canFetchLinks ? 'subtle' : 'primary'}
-              disabled={(!jobText.trim() && !jobUrl.trim()) || reading}
-              onClick={() => void createFromPosting(aiReady)}
-            >
-              {reading ? 'Leyendo…' : aiReady ? '✦ Leer el texto con IA' : 'Leer y crear postulación'}
-            </Button>
-            {aiReady && (
-              <Button disabled={(!jobText.trim() && !jobUrl.trim()) || reading} onClick={() => void createFromPosting(false)}>
-                Leer sin IA
-              </Button>
-            )}
-          </div>
-        </Card>
-      )}
-
-      {readNotes.length > 0 && (
-        <div className="stack" style={{ gap: 8, marginBottom: 16 }}>
-          {readNotes.map((n) => (
-            <div className="issue issue-warn" key={n}>
-              <span className="issue-icon">!</span>
-              <div>
-                <strong>{n}</strong>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {applications.length === 0 ? (
-        <Card>
-          <Empty
-            title="Sin postulaciones registradas"
-            text="Anota cada una, incluso las que todavía no envías. Ver el embudo completo es lo que te dice si el problema está en el CV o en la cantidad de envíos."
-            action={
-              <div className="row" style={{ justifyContent: 'center' }}>
-                <Button variant="primary" onClick={() => setAdding(true)}>
-                  Agregar desde un aviso
-                </Button>
-                <Button onClick={createBlank}>Crear una vacía</Button>
-              </div>
-            }
-          />
-        </Card>
-      ) : (
-        <Card
-          title="Tu tablero"
-          subtitle="Arrastra cada tarjeta cuando el proceso avance, o cámbiale el estado desde la ficha."
-          padded={false}
-        >
-          <div className="card-body">
-            <div className="board">
-              {COLUMNS.map((col) => {
-                const items = filtered.filter((a) => a.status === col.id);
-                return (
-                  <div
-                    key={col.id}
-                    className={`column ${dragOver === col.id ? 'drop' : ''}`}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setDragOver(col.id);
-                    }}
-                    onDragLeave={() => setDragOver((c) => (c === col.id ? null : c))}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      const id = e.dataTransfer.getData('text/plain');
-                      if (id) moveTo(id, col.id);
-                      setDragOver(null);
-                    }}
-                  >
-                    <div className="column-head">
-                      <span>{col.label}</span>
-                      <span>{items.length}</span>
-                    </div>
-                    <p className="column-hint">{col.hint}</p>
-                    {items.map((a) => {
-                      const d = a.appliedAt ? daysSince(a.appliedAt) : null;
-                      return (
-                        <div
-                          key={a.id}
-                          className="job-card"
-                          draggable
-                          onDragStart={(e) => e.dataTransfer.setData('text/plain', a.id)}
-                          onClick={() => setSelectedId(a.id === selectedId ? null : a.id)}
-                          style={{ borderColor: a.id === selectedId ? 'var(--accent)' : undefined }}
-                        >
-                          <strong>{a.role || 'Cargo sin nombre'}</strong>
-                          <div className="co">{a.company || 'Empresa'}</div>
-                          <div className="meta">
-                            {a.location && <span>{a.location}</span>}
-                            {d !== null && <span>hace {d} d</span>}
-                            {a.nextStepDate && <span>→ {formatDate(a.nextStepDate)}</span>}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {items.length === 0 && (
-                      <p className="faint" style={{ padding: '4px 4px 8px' }}>
-                        Vacío
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {selected && (
-        <Card
-          title={`${selected.role || 'Cargo'} · ${selected.company || 'Empresa'}`}
-          subtitle={`Creada el ${formatDate(selected.createdAt)}`}
-          actions={
-            <>
-              {selected.url && (
-                <a href={selected.url} target="_blank" rel="noreferrer">
-                  <Button size="sm" variant="ghost">
-                    Abrir aviso ↗
-                  </Button>
-                </a>
-              )}
-              <Button size="sm" variant="ghost" onClick={() => setSelectedId(null)}>
-                Cerrar
-              </Button>
-              <ConfirmButton
-                onConfirm={() => {
-                  setApplications(removeById(applications, selected.id));
-                  setSelectedId(null);
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setAdding(false);
+                  setParams({});
                 }}
               >
-                Eliminar
-              </ConfirmButton>
-            </>
-          }
-        >
-          <div className="grid">
-            <TextInput
-              label="Empresa"
-              value={selected.company}
-              onChange={(e) => patch(selected.id, { company: e.target.value })}
-            />
-            <TextInput label="Cargo" value={selected.role} onChange={(e) => patch(selected.id, { role: e.target.value })} />
-            <TextInput
-              label="Ubicación"
-              value={selected.location}
-              onChange={(e) => patch(selected.id, { location: e.target.value })}
-              placeholder="Remoto · Santiago"
-            />
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        </section>
+      ) : selected ? (
+        <section className="application-detail">
+          <button className="text-link" onClick={() => setParams({})}>
+            <ArrowLeft size={16} />
+            Volver a mis postulaciones
+          </button>
+          <div className="detail-heading">
+            <div>
+              <span className="pill mint">{STATUS_LABELS[selected.status]}</span>
+              <h2 tabIndex={-1} ref={titleRef}>
+                {selected.role || 'Trabajo sin nombre'}
+              </h2>
+              <p>{[selected.company, selected.location].filter(Boolean).join(' · ')}</p>
+            </div>
             <Select
-              label="Estado"
+              label="¿En qué va?"
               value={selected.status}
-              onChange={(e) => moveTo(selected.id, e.target.value as ApplicationStatus)}
+              onChange={(e) => changeStatus(selected, e.target.value as ApplicationStatus)}
             >
-              {COLUMNS.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
+              {Object.entries(STATUS_LABELS).map(([key, value]) => (
+                <option key={key} value={key}>
+                  {value}
                 </option>
               ))}
             </Select>
-            <TextInput
-              label="Fecha de postulación"
-              type="date"
-              value={selected.appliedAt}
-              onChange={(e) => patch(selected.id, { appliedAt: e.target.value })}
-            />
-            <TextInput
-              label="Fuente"
-              value={selected.source}
-              onChange={(e) => patch(selected.id, { source: e.target.value })}
-              placeholder="LinkedIn, referido, web de la empresa…"
-            />
-            <TextInput
-              label="Renta ofrecida o esperada"
-              value={selected.salary}
-              onChange={(e) => patch(selected.id, { salary: e.target.value })}
-            />
-            <TextInput
-              label="Enlace al aviso"
-              value={selected.url}
-              onChange={(e) => patch(selected.id, { url: e.target.value, source: selected.source || sourceFromUrl(e.target.value) })}
-            />
-            <TextInput
-              label="Próximo paso"
-              value={selected.nextStep}
-              onChange={(e) => patch(selected.id, { nextStep: e.target.value })}
-              placeholder="Enviar correo de seguimiento"
-              hint="Lo más importante de la ficha: sin próximo paso, la postulación se enfría sola."
-            />
-            <TextInput
-              label="¿Cuándo?"
-              type="date"
-              value={selected.nextStepDate}
-              onChange={(e) => patch(selected.id, { nextStepDate: e.target.value })}
-            />
-            <TextInput
-              label="Contacto"
-              value={selected.contact}
-              onChange={(e) => patch(selected.id, { contact: e.target.value })}
-              placeholder="Nombre · correo"
-            />
-            <TextArea
-              label="Notas"
-              rows={3}
-              value={selected.notes}
-              onChange={(e) => patch(selected.id, { notes: e.target.value })}
-              hint="Qué te preguntaron, con quién hablaste, qué quedó pendiente."
-            />
-            <TextArea
-              label="Descripción del cargo"
-              rows={6}
-              value={selected.jobDescription}
-              onChange={(e) => patch(selected.id, { jobDescription: e.target.value })}
-              hint="El texto del aviso. Se usa para comparar con tu CV y para armar la carta de presentación."
-            />
           </div>
-
-          {match && match.total > 0 && (
-            <div style={{ marginTop: 16 }}>
-              <div className="row" style={{ gap: 16, alignItems: 'flex-start' }}>
-                <ScoreRing value={match.score} label="calce" size={80} />
-                <div style={{ flex: 1, minWidth: 220 }}>
-                  <div className="field-label" style={{ marginBottom: 6 }}>
-                    Palabras del aviso que no están en tu perfil
+          {selected.status === 'guardada' && (
+            <section className="send-guide">
+              <span className="eyebrow">Todavía no has enviado esta postulación</span>
+              <h3>Vamos a preparar el envío.</h3>
+              <ol className="plain-steps">
+                <li>
+                  Descarga tu currículum y revisa que tenga tu contacto.
+                  <div className="row">
+                    <DownloadCv />
+                    <Link to="/cv" className="text-link">
+                      Revisarlo primero
+                    </Link>
                   </div>
-                  {match.missing.length === 0 ? (
-                    <p className="muted">Ninguna: tu perfil cubre el vocabulario del aviso.</p>
+                </li>
+                <li>
+                  Abre el aviso y sigue las instrucciones de la empresa.
+                  {link ? (
+                    <a
+                      className="btn btn-subtle"
+                      href={link}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={() => setPendingSend(selected.id)}
+                    >
+                      Abrir aviso
+                      <ExternalLink size={17} />
+                    </a>
                   ) : (
-                    <div className="chips">
-                      {match.missing.map((t) => (
-                        <span className="badge badge-warn" key={t}>
-                          {t}
-                        </span>
-                      ))}
-                    </div>
+                    <p>
+                      Agrega el enlace en «Datos del aviso» o usa el correo indicado por la empresa.
+                    </p>
                   )}
-                </div>
+                </li>
+                <li>Cuando hayas terminado, vuelve aquí y confirma el envío.</li>
+              </ol>
+              <Button variant="primary" onClick={() => setPendingSend(selected.id)}>
+                Ya terminé, registrar mi envío
+                <ArrowRight size={17} />
+              </Button>
+            </section>
+          )}
+          {pendingSend === selected.id && selected.status === 'guardada' && (
+            <div className="confirm-send" role="region" aria-label="Confirmar postulación">
+              <h3>¿Pudiste enviar tu postulación?</h3>
+              <p>Confirma solo si completaste el envío en la otra página o en tu correo.</p>
+              <div className="row">
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    changeStatus(selected, 'postulada');
+                    setPendingSend(null);
+                  }}
+                >
+                  Sí, ya la envié
+                </Button>
+                <Button onClick={() => setPendingSend(null)}>Todavía no</Button>
               </div>
             </div>
           )}
-
-          {selected.status === 'postulada' && selected.appliedAt && (daysSince(selected.appliedAt) ?? 0) >= 7 && (
-            <div className="issue issue-tip" style={{ marginTop: 16 }}>
-              <span className="issue-icon">i</span>
-              <div>
-                <strong>Van {daysSince(selected.appliedAt)} días sin novedad</strong>
-                <p>
-                  Es buen momento para un correo corto: recuerda tu interés, agrega algo nuevo (un
-                  proyecto, una idea sobre el cargo) y cierra con una pregunta concreta.
+          {selected.status === 'postulada' && (
+            <p className="notice">
+              <Check size={18} /> Registraste el envío el {formatDate(selected.appliedAt)}. Puedes
+              anotar un recordatorio para revisarlo después.
+            </p>
+          )}
+          <JobReview application={selected} />
+          <div className="grid-2">
+            <section className="card">
+              <div className="card-body">
+                <h3>
+                  <CalendarDays size={20} />
+                  Mi próximo paso
+                </h3>
+                <TextInput
+                  label="¿Qué quieres recordar?"
+                  value={selected.nextStep}
+                  onChange={(e) => patch(selected.id, { nextStep: e.target.value })}
+                  placeholder="Por ejemplo: llamar para consultar"
+                />
+                <TextInput
+                  label="¿Qué día?"
+                  type="date"
+                  value={selected.nextStepDate}
+                  onChange={(e) => patch(selected.id, { nextStepDate: e.target.value })}
+                />
+                <Button
+                  disabled={!selected.nextStepDate}
+                  onClick={() =>
+                    download('Recordatorio.ics', calendarFile(selected), 'text/calendar')
+                  }
+                >
+                  Añadir a mi calendario
+                </Button>
+                <p className="field-hint">
+                  Descarga un recordatorio para abrirlo en tu calendario. Impulso solo muestra
+                  pendientes mientras lo estás usando.
                 </p>
               </div>
+            </section>
+            <section className="card">
+              <div className="card-body">
+                <h3>Mis notas</h3>
+                <TextArea
+                  label="¿Qué pasó o qué quieres recordar?"
+                  value={selected.notes}
+                  onChange={(e) => patch(selected.id, { notes: e.target.value })}
+                  rows={5}
+                  placeholder="Con quién hablaste, qué te pidieron…"
+                />
+                {(selected.status === 'entrevista' || selected.status === 'oferta') && (
+                  <Link className="btn btn-subtle" to="/entrevistas">
+                    Preparar mi entrevista
+                    <ArrowRight size={17} />
+                  </Link>
+                )}
+              </div>
+            </section>
+          </div>
+          <details>
+            <summary>Preparar un correo para esta empresa</summary>
+            <p>
+              Usa el correo indicado en el aviso. Abriremos un borrador que tú puedes revisar y
+              enviar.
+            </p>
+            <TextInput
+              label="Correo de la empresa"
+              type="email"
+              value={recipient}
+              onChange={(e) => setRecipient(e.target.value)}
+              placeholder="seleccion@empresa.cl"
+            />
+            <TextArea label="Texto para copiar" value={message} readOnly rows={8} />
+            <div className="row">
+              <CopyButton text={message} label="Copiar mensaje" />
+              {/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient) && (
+                <a
+                  className="btn btn-primary"
+                  href={
+                    'mailto:' +
+                    encodeURIComponent(recipient) +
+                    '?subject=' +
+                    encodeURIComponent('Postulación: ' + selected.role) +
+                    '&body=' +
+                    encodeURIComponent(message)
+                  }
+                >
+                  <Mail size={17} />
+                  Abrir mi correo
+                </a>
+              )}
             </div>
+            <p className="notice">
+              Adjunta el PDF desde la carpeta Descargas. El currículum no se adjunta automáticamente
+              y abrir el borrador no envía el correo.
+            </p>
+            <Link to="/cartas" className="text-link">
+              Preparar una carta más detallada
+              <ArrowRight size={16} />
+            </Link>
+          </details>
+          <details>
+            <summary>Datos del aviso</summary>
+            <div className="grid-2">
+              <TextInput
+                label="Trabajo"
+                value={selected.role}
+                onChange={(e) => patch(selected.id, { role: e.target.value })}
+              />
+              <TextInput
+                label="Empresa"
+                value={selected.company}
+                onChange={(e) => patch(selected.id, { company: e.target.value })}
+              />
+              <TextInput
+                label="Ubicación"
+                value={selected.location}
+                onChange={(e) => patch(selected.id, { location: e.target.value })}
+              />
+              <TextInput
+                label="Sueldo publicado (si aparece)"
+                value={selected.salary}
+                onChange={(e) => patch(selected.id, { salary: e.target.value })}
+              />
+              <TextInput
+                label="Enlace"
+                value={selected.url}
+                onChange={(e) => patch(selected.id, { url: e.target.value })}
+              />
+              <TextInput
+                label="Contacto"
+                value={selected.contact}
+                onChange={(e) => patch(selected.id, { contact: e.target.value })}
+              />
+              <TextInput
+                label="Fecha en que postulaste"
+                type="date"
+                value={selected.appliedAt}
+                onChange={(e) => patch(selected.id, { appliedAt: e.target.value })}
+              />
+            </div>
+            {selected.url && !link && (
+              <p role="alert" className="error-text">
+                El enlace no es válido. Debe comenzar con https:// o http://.
+              </p>
+            )}
+            <TextArea
+              label="Descripción y requisitos del trabajo"
+              value={selected.jobDescription}
+              onChange={(e) => patch(selected.id, { jobDescription: e.target.value })}
+              rows={7}
+            />
+            {link && (
+              <a className="text-link" target="_blank" rel="noreferrer" href={link}>
+                Ver aviso original
+                <ExternalLink size={16} />
+              </a>
+            )}
+          </details>
+          <ConfirmButton
+            confirmLabel="Sí, eliminar este aviso"
+            onConfirm={() => {
+              setDeleted(selected);
+              apply((s) => ({
+                ...s,
+                applications: s.applications.filter((a) => a.id !== selected.id),
+              }));
+              setParams({});
+            }}
+          >
+            Eliminar aviso
+          </ConfirmButton>
+        </section>
+      ) : (
+        <>
+          {state.applications.length > 0 ? (
+            <>
+              <div className="filter-bar">
+                <TextInput
+                  label="Buscar entre mis avisos"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Trabajo, empresa o ciudad"
+                />
+                <Select label="Mostrar" value={filter} onChange={(e) => setFilter(e.target.value)}>
+                  <option value="todas">Todos mis avisos</option>
+                  {Object.entries(STATUS_LABELS).map(([k, v]) => (
+                    <option value={k} key={k}>
+                      {v}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="application-list">
+                {list.map((a) => (
+                  <Link className="application-row" to={'?ver=' + a.id} key={a.id}>
+                    <span className="company-avatar">
+                      {(a.company || a.role || 'T')[0].toUpperCase()}
+                    </span>
+                    <div>
+                      <h2>{a.role || 'Trabajo sin nombre'}</h2>
+                      <p>{[a.company, a.location].filter(Boolean).join(' · ')}</p>
+                      {a.nextStepDate && (
+                        <small>
+                          {a.nextStepDate < localDate() ? 'Pendiente: ' : ''}
+                          {a.nextStep || 'Recordatorio'} · {formatDate(a.nextStepDate)}
+                        </small>
+                      )}
+                    </div>
+                    <span
+                      className={
+                        'pill ' +
+                        (a.status === 'guardada'
+                          ? 'yellow'
+                          : a.status === 'rechazada'
+                            ? 'neutral'
+                            : 'mint')
+                      }
+                    >
+                      {STATUS_LABELS[a.status]}
+                    </span>
+                    <ArrowRight size={19} />
+                  </Link>
+                ))}
+                {!list.length && (
+                  <p className="notice">
+                    No hay avisos con ese filtro. Prueba otro nombre o muestra todos.
+                  </p>
+                )}
+              </div>
+            </>
+          ) : (
+            <section className="empty-welcome">
+              <Bookmark size={44} />
+              <h2>Aquí empieza tu lista de oportunidades.</h2>
+              <p>
+                Cuando encuentres un trabajo que te interese, guarda el aviso. No necesitas postular
+                de inmediato.
+              </p>
+              <div className="row">
+                <Link className="btn btn-primary" to="/buscar">
+                  Buscar mi primer aviso
+                  <ArrowRight size={18} />
+                </Link>
+                <Button onClick={() => setAdding(true)}>Ya encontré uno</Button>
+              </div>
+            </section>
           )}
-        </Card>
+        </>
       )}
     </>
   );

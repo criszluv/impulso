@@ -6,82 +6,101 @@ import { clearAiSettings, loadAiSettings, saveAiSettings } from '../lib/ai/setti
 import type { AiSettings } from '../lib/ai/settings';
 import { AppContext } from './context';
 import type { AppContextValue } from './context';
-
-const STORAGE_KEY = 'impulso.state.v1';
-
-function loadState(): AppState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return initialState;
-    const parsed = JSON.parse(raw) as Partial<AppState>;
-    return {
-      ...initialState,
-      ...parsed,
-      profile: { ...initialState.profile, ...parsed.profile },
-      cv: { ...initialState.cv, ...parsed.cv },
-    };
-  } catch {
-    return initialState;
-  }
-}
+import { checkpoint, loadState, persistState, STORAGE_KEY, RECOVERY_KEY } from '../lib/storage';
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AppState>(loadState);
+  const [loaded] = useState(loadState);
+  const [state, setState] = useState<AppState>(loaded.state);
+  const [saveError, setSaveError] = useState(loaded.error);
   const [saved, setSaved] = useState(false);
   const [ai, setAiState] = useState<AiSettings>(loadAiSettings);
-  const timer = useRef<number | undefined>(undefined);
-  const firstRun = useRef(true);
+  const [undoState, setUndoState] = useState<AppState | null>(null);
+  const previous = useRef(state);
+  const blocked = useRef(!!loaded.error);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {
-      // Cuota llena o modo privado: la app sigue funcionando en memoria.
-    }
-    if (firstRun.current) {
-      firstRun.current = false;
-      return;
-    }
-    setSaved(true);
-    window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setSaved(false), 1400);
-    return () => window.clearTimeout(timer.current);
+    if (previous.current === state) return;
+    previous.current = state;
+    if (blocked.current) return;
+    const error = persistState(state);
+    setSaveError(error);
+    setSaved(!error);
+    const timer = window.setTimeout(() => setSaved(false), 2200);
+    return () => clearTimeout(timer);
   }, [state]);
-
   useEffect(() => {
-    document.documentElement.dataset.theme = state.theme;
-  }, [state.theme]);
-
-  const apply = useCallback((updater: (s: AppState) => AppState) => {
-    setState((prev) => updater(prev));
+    document.documentElement.dataset.theme = 'light';
   }, []);
 
+  const apply = useCallback((updater: (s: AppState) => AppState) => setState(updater), []);
+  const replaceAll = useCallback((next: AppState) => {
+    setState((prev) => {
+      checkpoint(prev);
+      setUndoState(prev);
+      return next;
+    });
+    blocked.current = false;
+    setSaveError('');
+  }, []);
   const setAi = useCallback((next: AiSettings) => {
-    setAiState(next);
-    // Se guarda por el proveedor elegido, no por la clave: los modelos locales
-    // no llevan clave y aun así hay que recordarlos.
-    if (next.preset) saveAiSettings(next);
-    else clearAiSettings();
+    try {
+      if (next.preset) saveAiSettings(next);
+      else clearAiSettings();
+      setAiState(next);
+    } catch {
+      setSaveError('No pudimos guardar la configuración del asistente.');
+    }
   }, []);
-
+  const clearAll = useCallback(() => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(RECOVERY_KEY);
+      clearAiSettings();
+      setAiState(loadAiSettings());
+      setUndoState(null);
+      blocked.current = false;
+      setState(structuredClone(initialState));
+      setSaveError('');
+    } catch {
+      setSaveError('No pudimos borrar los datos de este navegador.');
+    }
+  }, []);
   const value = useMemo<AppContextValue>(
     () => ({
       state,
       apply,
       saved,
+      saveError,
       ai,
       setAi,
+      replaceAll,
+      clearAll,
+      undoAvailable: !!undoState,
+      undo: () => {
+        if (undoState) {
+          setState(undoState);
+          setUndoState(null);
+        }
+      },
+      retrySave: () => {
+        if (blocked.current) return;
+        const error = persistState(state);
+        setSaveError(error);
+        setSaved(!error);
+      },
       patchPersonal: (patch) =>
-        apply((s) => ({ ...s, profile: { ...s.profile, personal: { ...s.profile.personal, ...patch } } })),
-      setProfileList: (key, items) => apply((s) => ({ ...s, profile: { ...s.profile, [key]: items } })),
+        apply((s) => ({
+          ...s,
+          profile: { ...s.profile, personal: { ...s.profile.personal, ...patch } },
+        })),
+      setProfileList: (key, items) =>
+        apply((s) => ({ ...s, profile: { ...s.profile, [key]: items } })),
       patchCv: (patch) => apply((s) => ({ ...s, cv: { ...s.cv, ...patch } })),
       setApplications: (items) => apply((s) => ({ ...s, applications: items })),
       setLetters: (items) => apply((s) => ({ ...s, letters: items })),
       setAnswers: (items) => apply((s) => ({ ...s, answers: items })),
-      replaceAll: (next) => setState(next),
     }),
-    [state, apply, saved, ai, setAi],
+    [state, apply, saved, saveError, ai, setAi, replaceAll, clearAll, undoState],
   );
-
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

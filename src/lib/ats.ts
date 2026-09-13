@@ -52,14 +52,16 @@ export function atsReview(profile: Profile, cv: CvConfig): AtsReview {
       label: 'Entre una y dos páginas',
       ok: stats.estimatedPages <= 2,
       weight: 2,
-      detail: 'Sobre dos páginas hay parsers que cortan el contenido y reclutadores que no llegan al final.',
+      detail:
+        'Sobre dos páginas hay parsers que cortan el contenido y reclutadores que no llegan al final.',
     },
     {
       id: 'contacto',
       label: 'Correo y teléfono visibles',
       ok: Boolean(p.email && p.phone),
       weight: 3,
-      detail: 'Sin datos de contacto en el cuerpo del CV, la postulación queda huérfana. No los pongas en el encabezado del documento.',
+      detail:
+        'Sin datos de contacto en el cuerpo del CV, la postulación queda huérfana. No los pongas en el encabezado del documento.',
     },
     {
       id: 'ciudad',
@@ -73,7 +75,8 @@ export function atsReview(profile: Profile, cv: CvConfig): AtsReview {
       label: 'Titular con el cargo',
       ok: Boolean(p.headline),
       weight: 2,
-      detail: 'El cargo objetivo escrito tal como aparece en el aviso es una de las coincidencias que más puntúa.',
+      detail:
+        'El cargo objetivo escrito tal como aparece en el aviso es una de las coincidencias que más puntúa.',
     },
     {
       id: 'habilidades',
@@ -88,7 +91,8 @@ export function atsReview(profile: Profile, cv: CvConfig): AtsReview {
       label: 'Todos los cargos con fecha de inicio',
       ok: profile.experience.length > 0 && withDates === profile.experience.length,
       weight: 2,
-      detail: 'Un cargo sin fecha queda fuera del cálculo de años de experiencia que hace el filtro.',
+      detail:
+        'Un cargo sin fecha queda fuera del cálculo de años de experiencia que hace el filtro.',
     },
     {
       id: 'cifras',
@@ -102,7 +106,8 @@ export function atsReview(profile: Profile, cv: CvConfig): AtsReview {
       label: 'Resumen profesional',
       ok: p.summary.trim().length > 80,
       weight: 1,
-      detail: 'Va justo después del contacto y es lo primero que se lee, tanto la máquina como la persona.',
+      detail:
+        'Va justo después del contacto y es lo primero que se lee, tanto la máquina como la persona.',
     },
   ];
 

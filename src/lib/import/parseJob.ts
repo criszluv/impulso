@@ -49,9 +49,28 @@ export function sourceFromUrl(url: string): string {
 
 const MODALITY = /\b(remoto|teletrabajo|h[ií]brido|presencial|remote|hybrid|on-?site)\b/i;
 const CITIES = [
-  'santiago', 'osorno', 'valdivia', 'puerto montt', 'temuco', 'concepcion', 'valparaiso',
-  'viña del mar', 'vina del mar', 'antofagasta', 'la serena', 'rancagua', 'talca', 'iquique',
-  'arica', 'chillan', 'punta arenas', 'coquimbo', 'calama', 'copiapo', 'los angeles', 'curico',
+  'santiago',
+  'osorno',
+  'valdivia',
+  'puerto montt',
+  'temuco',
+  'concepcion',
+  'valparaiso',
+  'viña del mar',
+  'vina del mar',
+  'antofagasta',
+  'la serena',
+  'rancagua',
+  'talca',
+  'iquique',
+  'arica',
+  'chillan',
+  'punta arenas',
+  'coquimbo',
+  'calama',
+  'copiapo',
+  'los angeles',
+  'curico',
 ];
 
 const SALARY_RE =
@@ -60,10 +79,59 @@ const SALARY_RE =
 type TextField = 'role' | 'company' | 'location' | 'salary';
 
 const LABELLED: Array<{ key: TextField; labels: string[] }> = [
-  { key: 'role', labels: ['cargo', 'puesto', 'posicion', 'posición', 'titulo del cargo', 'job title', 'position', 'vacante'] },
-  { key: 'company', labels: ['empresa', 'compania', 'compañia', 'compañía', 'organizacion', 'organización', 'company', 'employer', 'contratante'] },
-  { key: 'location', labels: ['ubicacion', 'ubicación', 'lugar', 'localidad', 'ciudad', 'location', 'modalidad', 'jornada y lugar'] },
-  { key: 'salary', labels: ['sueldo', 'renta', 'salario', 'remuneracion', 'remuneración', 'banda salarial', 'salary', 'compensation'] },
+  {
+    key: 'role',
+    labels: [
+      'cargo',
+      'puesto',
+      'posicion',
+      'posición',
+      'titulo del cargo',
+      'job title',
+      'position',
+      'vacante',
+    ],
+  },
+  {
+    key: 'company',
+    labels: [
+      'empresa',
+      'compania',
+      'compañia',
+      'compañía',
+      'organizacion',
+      'organización',
+      'company',
+      'employer',
+      'contratante',
+    ],
+  },
+  {
+    key: 'location',
+    labels: [
+      'ubicacion',
+      'ubicación',
+      'lugar',
+      'localidad',
+      'ciudad',
+      'location',
+      'modalidad',
+      'jornada y lugar',
+    ],
+  },
+  {
+    key: 'salary',
+    labels: [
+      'sueldo',
+      'renta',
+      'salario',
+      'remuneracion',
+      'remuneración',
+      'banda salarial',
+      'salary',
+      'compensation',
+    ],
+  },
 ];
 
 function looksLikeNoise(line: string): boolean {
@@ -71,7 +139,9 @@ function looksLikeNoise(line: string): boolean {
   return (
     flat.length < 3 ||
     flat.length > 110 ||
-    /^(inicia sesion|iniciar sesion|postular|guardar|compartir|cookies|aceptar|menu|buscar|inicio|volver|siguiente|anterior|ver mas|mostrar mas)$/.test(flat)
+    /^(inicia sesion|iniciar sesion|postular|guardar|compartir|cookies|aceptar|menu|buscar|inicio|volver|siguiente|anterior|ver mas|mostrar mas)$/.test(
+      flat,
+    )
   );
 }
 
@@ -80,7 +150,14 @@ function looksLikeNoise(line: string): boolean {
  * no tipear: lo detectado se muestra en el formulario para corregirlo.
  */
 export function parseJobPosting(text: string, url = ''): ParsedJob {
-  const result: ParsedJob = { role: '', company: '', location: '', salary: '', source: sourceFromUrl(url), notes: [] };
+  const result: ParsedJob = {
+    role: '',
+    company: '',
+    location: '',
+    salary: '',
+    source: sourceFromUrl(url),
+    notes: [],
+  };
   const lines = text
     .replace(/\r\n/g, '\n')
     .split('\n')
@@ -144,7 +221,9 @@ export function parseJobPosting(text: string, url = ''): ParsedJob {
 
   // 5. Sueldo.
   if (!result.salary) {
-    const near = lines.find((l) => /(sueldo|renta|salario|remunerac|salary|banda)/i.test(l) && SALARY_RE.test(l));
+    const near = lines.find(
+      (l) => /(sueldo|renta|salario|remunerac|salary|banda)/i.test(l) && SALARY_RE.test(l),
+    );
     const match = (near ?? text).match(SALARY_RE);
     if (match) result.salary = match[1].trim();
   }
@@ -156,7 +235,9 @@ export function parseJobPosting(text: string, url = ''): ParsedJob {
     );
   }
   if (text.trim().length < 200) {
-    result.notes.push('El texto es muy corto: pega el aviso completo para que el comparador con tu CV sirva.');
+    result.notes.push(
+      'El texto es muy corto: pega el aviso completo para que el comparador con tu CV sirva.',
+    );
   }
 
   return result;

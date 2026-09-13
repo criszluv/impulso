@@ -1,50 +1,17 @@
 import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Upload, FileText, ArrowRight } from 'lucide-react';
 import { useApp } from '../state/context';
-import type { AppState } from '../types';
-import { initialState } from '../lib/defaults';
-import { detectKind, docxToText, pdfToText, zipToCsvMap } from '../lib/import/files';
+import { pdfToText, docxToText, zipToCsvMap, detectKind } from '../lib/import/files';
 import { parseCvText } from '../lib/import/parseCv';
 import type { ParsedCv } from '../lib/import/parseCv';
 import { parseLinkedInCsvs } from '../lib/import/linkedin';
-import { SECTION_LABELS, applyParsed, countOf } from '../lib/import/apply';
-import type { ImportMode, SectionKey } from '../lib/import/apply';
-import { describeSettings, isConfigured, presetById } from '../lib/ai/settings';
-import { AiError } from '../lib/ai/errors';
-import { formatRange } from '../lib/utils';
-import { Badge, Button, Card, Empty, Select, TextArea, Toggle } from '../components/ui';
+import { applyParsed, SECTION_LABELS, countOf } from '../lib/import/apply';
+import type { SectionKey, ImportMode } from '../lib/import/apply';
+import { isConfigured } from '../lib/ai/settings';
+import { Button, TextArea, Select, Toggle } from '../components/ui';
 
-type Source = 'archivo' | 'texto' | 'linkedin' | 'copia';
-
-const SOURCES: Array<{ id: Source; title: string; detail: string; icon: string }> = [
-  {
-    id: 'archivo',
-    title: 'Mi CV en PDF o Word',
-    detail: 'Sube el currículum que ya tienes. Lee el texto y reparte los datos en las secciones.',
-    icon: '▤',
-  },
-  {
-    id: 'texto',
-    title: 'Pegar texto de cualquier parte',
-    detail:
-      'Tu perfil de LinkedIn, tu portafolio, un Google Docs, una página de empresa. Seleccionas, copias y pegas.',
-    icon: '¶',
-  },
-  {
-    id: 'linkedin',
-    title: 'Copia de datos de LinkedIn',
-    detail: 'El ZIP oficial que entrega LinkedIn. Es la vía más fiel, porque no hay que interpretar nada.',
-    icon: 'in',
-  },
-  {
-    id: 'copia',
-    title: 'Una copia de Impulso',
-    detail: 'El archivo .json que exportaste antes desde Ajustes.',
-    icon: '↺',
-  },
-];
-
-const ALL_SECTIONS: SectionKey[] = [
+const sections: SectionKey[] = [
   'personal',
   'experience',
   'education',
@@ -53,612 +20,254 @@ const ALL_SECTIONS: SectionKey[] = [
   'projects',
   'certifications',
 ];
-
 export function ImportPage() {
-  const { state, apply, replaceAll, ai } = useApp();
-  const navigate = useNavigate();
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const aiReady = isConfigured(ai);
-  const aiIsLocal = /localhost|127\.0\.0\.1/.test(presetById(ai.preset)?.baseUrl ?? '');
-  const [source, setSource] = useState<Source | null>(null);
-  const [busy, setBusy] = useState('');
-  const [error, setError] = useState('');
-  const [pasted, setPasted] = useState('');
-  const [parsed, setParsed] = useState<ParsedCv | null>(null);
-  const [mode, setMode] = useState<ImportMode>('reemplazar');
-  const [include, setInclude] = useState<Set<SectionKey>>(new Set(ALL_SECTIONS));
-  const [dragging, setDragging] = useState(false);
-  const [useAi, setUseAi] = useState(true);
-
-  const withAi = aiReady && useAi;
-  const hasProfile = Boolean(state.profile.personal.fullName || state.profile.experience.length);
-
-  const reset = () => {
-    setParsed(null);
-    setError('');
-    setPasted('');
-    setBusy('');
-  };
-
-  /** Punto único de lectura: decide entre el modelo y el lector local. */
-  const readText = async (text: string) => {
-    if (!withAi) {
-      setParsed(parseCvText(text));
-      return;
-    }
-    setBusy('Leyendo con IA… puede tardar hasta un minuto.');
-    try {
-      // El SDK y el esquema pesan; se cargan solo cuando la IA se usa de verdad.
-      const { extractCvWithAi } = await import('../lib/ai/extract');
-      setParsed(await extractCvWithAi(text, ai));
-    } catch (e) {
-      const detail = e instanceof AiError ? e.message : 'Falló la lectura con IA.';
-      setError(`${detail} Se usó el lector sin IA como respaldo.`);
-      setParsed(parseCvText(text));
-    } finally {
-      setBusy('');
-    }
-  };
-
-  const handleFile = async (file: File) => {
-    setError('');
-    setParsed(null);
-    const kind = detectKind(file);
-    try {
-      if (kind === 'json') {
-        const data = JSON.parse(await file.text()) as AppState;
-        if (!data || typeof data !== 'object' || !data.profile) throw new Error('formato');
-        replaceAll({ ...initialState, ...data });
-        navigate('/perfil');
-        return;
-      }
-
-      if (kind === 'zip') {
-        setBusy('Abriendo el ZIP de LinkedIn…');
-        const csvs = await zipToCsvMap(file);
-        setParsed(parseLinkedInCsvs(csvs));
-        setBusy('');
-        return;
-      }
-
-      if (kind === 'csv') {
-        setBusy('Leyendo el CSV…');
-        const base = file.name.toLowerCase();
-        setParsed(parseLinkedInCsvs({ [base]: await file.text() }));
-        setBusy('');
-        return;
-      }
-
-      setBusy(kind === 'pdf' ? 'Extrayendo el texto del PDF…' : 'Leyendo el documento…');
-      const text =
-        kind === 'pdf' ? await pdfToText(file) : kind === 'docx' ? await docxToText(file) : await file.text();
-
-      if (text.replace(/\s/g, '').length < 60) {
-        setBusy('');
-        setError(
-          'Del archivo salió muy poco texto. Si tu PDF es un escaneo o una imagen, no se puede leer: copia el contenido a mano y usa «Pegar texto».',
-        );
-        return;
-      }
-      await readText(text);
-    } catch (e) {
-      setBusy('');
-      setError(
-        e instanceof Error && e.message === 'formato'
-          ? 'Ese .json no es una copia de Impulso.'
-          : 'No pude leer el archivo. Prueba con «Pegar texto», que funciona siempre.',
+  const { state, replaceAll, ai } = useApp(),
+    nav = useNavigate(),
+    input = useRef<HTMLInputElement>(null);
+  const [text, setText] = useState(''),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(''),
+    [parsed, setParsed] = useState<ParsedCv | null>(null),
+    [include, setInclude] = useState(new Set(sections)),
+    [mode, setMode] = useState<ImportMode>('agregar'),
+    [useAi, setUseAi] = useState(false);
+  const read = async (value: string) => {
+    if (!value.trim())
+      throw new Error(
+        'No encontramos texto. Si es una foto o un escaneo, puedes escribir tus datos con la guía paso a paso.',
       );
+    if (useAi && isConfigured(ai)) {
+      const { extractCvWithAi } = await import('../lib/ai/extract');
+      return await extractCvWithAi(value, ai);
+    }
+    return parseCvText(value);
+  };
+  const fileRead = async (file: File) => {
+    setBusy(true);
+    setError('');
+    setParsed(null);
+    try {
+      if (file.size > 15 * 1024 * 1024)
+        throw new Error('El archivo es demasiado grande. Prueba uno de menos de 15 MB.');
+      const kind = detectKind(file);
+      if (kind === 'json') {
+        nav('/ajustes');
+        return;
+      }
+      if (kind === 'zip') {
+        setParsed(parseLinkedInCsvs(await zipToCsvMap(file)));
+        return;
+      }
+      const content =
+        kind === 'pdf'
+          ? await pdfToText(file)
+          : kind === 'docx'
+            ? await docxToText(file)
+            : kind === 'txt'
+              ? await file.text()
+              : null;
+      if (content === null)
+        throw new Error(
+          'Elige un PDF, Word (.docx) o archivo de texto. Los archivos .doc antiguos deben guardarse primero como .docx.',
+        );
+      setParsed(await read(content));
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'No pudimos leer el archivo. Puedes usar la guía paso a paso.',
+      );
+    } finally {
+      setBusy(false);
+      if (input.current) input.current.value = '';
     }
   };
-
-  const applyNow = () => {
-    if (!parsed) return;
-    apply((s) => applyParsed(s, parsed, mode, include));
-    navigate('/perfil');
-  };
-
-  const toggle = (key: SectionKey) => {
-    setInclude((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-
-  const readButtons = (
-    <div className="row" style={{ marginTop: 12 }}>
-      <Button
-        variant="primary"
-        disabled={pasted.trim().length < 60 || Boolean(busy)}
-        onClick={() => void readText(pasted)}
-      >
-        {busy ? 'Leyendo…' : withAi ? '✦ Leer con IA' : 'Leer el texto'}
-      </Button>
-      {withAi && (
-        <Button disabled={pasted.trim().length < 60 || Boolean(busy)} onClick={() => setParsed(parseCvText(pasted))}>
-          Leer sin IA
-        </Button>
-      )}
-      <span className="faint">Se muestra lo detectado antes de guardar nada.</span>
-    </div>
-  );
-
-  // ---------- Paso 3: revisión ----------
-  if (parsed) {
-    const totals = ALL_SECTIONS.map((key) => ({ key, count: countOf(parsed, key) }));
-    const detected = totals.filter((t) => t.count > 0);
-
-    return (
-      <>
-        <div className="page-head">
-          <div>
-            <h1>Revisa lo que encontré</h1>
-            <p>
-              Nada se guarda hasta que confirmes. Después puedes editar todo campo por campo en tu
-              perfil.
-            </p>
-          </div>
-          <div className="head-actions">
-            <Button onClick={reset}>Volver a empezar</Button>
-            <Button variant="primary" onClick={applyNow} disabled={!detected.length}>
-              Guardar en mi perfil
-            </Button>
-          </div>
-        </div>
-
-        {error && (
-          <div className="issue issue-warn" style={{ marginBottom: 12 }}>
-            <span className="issue-icon">!</span>
-            <div>
-              <strong>{error}</strong>
-            </div>
-          </div>
-        )}
-
-        {parsed.notes.map((note) => (
-          <div className="issue issue-tip" key={note} style={{ marginBottom: 12 }}>
-            <span className="issue-icon">i</span>
-            <div>
-              <strong>{note}</strong>
-            </div>
-          </div>
-        ))}
-
-        {!detected.length ? (
-          <Card>
-            <Empty
-              title="No reconocí nada aprovechable"
-              text="Suele pasar con CV muy gráficos o con encabezados poco comunes. Prueba pegando el texto y revisa que las secciones se llamen Experiencia, Educación y Habilidades."
-              action={<Button onClick={reset}>Probar de otra forma</Button>}
-            />
-          </Card>
-        ) : (
-          <>
-            {!aiReady && (
-              <div className="next-step">
-                <span className="num" aria-hidden="true">
-                  ✦
-                </span>
-                <div style={{ flex: 1, minWidth: 220 }}>
-                  <h3>¿Quedaron datos en campos equivocados?</h3>
-                  <p>
-                    El lector incluido adivina la estructura con reglas, y con CV de columnas o
-                    encabezados poco comunes se equivoca. Con un modelo detrás mejora bastante, y
-                    puede ser uno gratis corriendo en tu propio computador.
-                  </p>
-                </div>
-                <Link to="/ajustes">
-                  <Button variant="primary">Configurar IA</Button>
-                </Link>
-              </div>
-            )}
-
-            <Card title="Qué incluir" subtitle="Desmarca lo que no quieras traer.">
-              <div className="stack" style={{ gap: 8 }}>
-                {totals.map(({ key, count }) => (
-                  <label
-                    key={key}
-                    className="stat"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      cursor: count ? 'pointer' : 'default',
-                      opacity: count ? 1 : 0.45,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={include.has(key) && count > 0}
-                      disabled={!count}
-                      onChange={() => toggle(key)}
-                    />
-                    <b style={{ fontSize: 14, flex: 1 }}>{SECTION_LABELS[key]}</b>
-                    <Badge tone={count ? 'good' : 'neutral'}>
-                      {count
-                        ? `${count} ${key === 'personal' ? 'campos' : count === 1 ? 'elemento' : 'elementos'}`
-                        : 'nada'}
-                    </Badge>
-                  </label>
-                ))}
-              </div>
-
-              {hasProfile && (
-                <div style={{ marginTop: 16 }}>
-                  <Select
-                    label="Ya tienes datos cargados"
-                    hint="Las secciones que no se detectaron quedan intactas en los dos casos."
-                    value={mode}
-                    onChange={(e) => setMode(e.target.value as ImportMode)}
-                  >
-                    <option value="reemplazar">Reemplazar las secciones que traiga</option>
-                    <option value="agregar">Sumar a lo que ya tengo</option>
-                  </Select>
-                </div>
-              )}
-            </Card>
-
-            <Card title="Vista previa">
-              <div className="stack">
-                {Object.entries(parsed.personal).filter(([, v]) => String(v ?? '').trim()).length > 0 && (
-                  <div>
-                    <div className="field-label" style={{ marginBottom: 6 }}>
-                      Datos personales
-                    </div>
-                    <div className="chips">
-                      {Object.entries(parsed.personal)
-                        .filter(([, v]) => String(v ?? '').trim())
-                        .map(([k, v]) => (
-                          <span className="badge" key={k}>
-                            {String(v).length > 60 ? `${String(v).slice(0, 60)}…` : String(v)}
-                          </span>
-                        ))}
-                    </div>
-                  </div>
-                )}
-
-                {parsed.experience.length > 0 && (
-                  <div>
-                    <div className="field-label" style={{ margin: '10px 0 6px' }}>
-                      Experiencia
-                    </div>
-                    {parsed.experience.map((e) => (
-                      <div className="item" key={e.id} style={{ marginBottom: 8 }}>
-                        <div className="item-head">
-                          <h3>{e.role || <span className="faint">Cargo sin reconocer</span>}</h3>
-                          <span className="faint">{e.company}</span>
-                          <span className="spacer" />
-                          <span className="faint">{formatRange(e.startDate, e.endDate, e.current)}</span>
-                        </div>
-                        {e.bullets.length > 0 && (
-                          <div className="item-body" style={{ paddingTop: 10, paddingBottom: 10 }}>
-                            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
-                              {e.bullets.slice(0, 4).map((b, i) => (
-                                <li key={i} className="muted">
-                                  {b}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {parsed.education.length > 0 && (
-                  <div>
-                    <div className="field-label" style={{ margin: '10px 0 6px' }}>
-                      Formación
-                    </div>
-                    <ul className="checklist">
-                      {parsed.education.map((e) => (
-                        <li key={e.id}>
-                          <span className="mark">✓</span>
-                          <div style={{ flex: 1 }}>
-                            <span className="label">{e.degree || 'Sin título reconocido'}</span>
-                            <small>
-                              {e.institution} · {formatRange(e.startDate, e.endDate, e.current)}
-                            </small>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {parsed.skills.length > 0 && (
-                  <div>
-                    <div className="field-label" style={{ margin: '10px 0 6px' }}>
-                      Habilidades
-                    </div>
-                    {parsed.skills.map((g) => (
-                      <div key={g.id} style={{ marginBottom: 8 }}>
-                        <div className="faint" style={{ marginBottom: 4 }}>
-                          {g.name}
-                        </div>
-                        <div className="chips">
-                          {g.items.map((i) => (
-                            <span className="badge" key={i}>
-                              {i}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {(parsed.languages.length > 0 || parsed.certifications.length > 0) && (
-                  <div className="chips" style={{ marginTop: 6 }}>
-                    {parsed.languages.map((l) => (
-                      <span className="badge badge-accent" key={l.id}>
-                        {l.name}: {l.level}
-                      </span>
-                    ))}
-                    {parsed.certifications.map((c) => (
-                      <span className="badge" key={c.id}>
-                        {c.name}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </Card>
-
-            <div className="row" style={{ justifyContent: 'flex-end' }}>
-              <Button variant="primary" onClick={applyNow}>
-                Guardar en mi perfil →
-              </Button>
-            </div>
-          </>
-        )}
-      </>
-    );
-  }
-
-  // ---------- Paso 1 y 2: elegir origen y entregar el material ----------
+  const hasData = parsed && sections.some((k) => countOf(parsed, k) > 0);
   return (
-    <>
+    <div className="narrow-page">
+      <Link to="/cv" className="text-link">
+        <ArrowLeft size={17} />
+        Volver a mi currículum
+      </Link>
       <div className="page-head">
         <div>
-          <h1>Trae lo que ya tienes</h1>
+          <span className="eyebrow">Aprovecha lo que ya tienes</span>
+          <h1>Trae tu currículum.</h1>
+          <p>Leemos el archivo, te mostramos lo que encontramos y tú decides qué guardar.</p>
+        </div>
+      </div>
+      <section className="upload-zone">
+        <FileText size={42} />
+        <h2>Elige tu archivo</h2>
+        <p>PDF, Word (.docx) o texto · Hasta 15 MB</p>
+        <input
+          ref={input}
+          type="file"
+          accept=".pdf,.docx,.txt,.zip"
+          hidden
+          aria-label="Seleccionar currículum"
+          onChange={(e) => {
+            if (e.target.files?.[0]) void fileRead(e.target.files[0]);
+          }}
+        />
+        <Button variant="primary" disabled={busy} onClick={() => input.current?.click()}>
+          <Upload size={18} />
+          {busy ? 'Leyendo tu archivo…' : 'Buscar archivo en mi equipo'}
+        </Button>
+        <span className="field-hint">También puedes buscarlo en la carpeta Descargas.</span>
+      </section>
+      {isConfigured(ai) && (
+        <details>
+          <summary>Usar mi asistente opcional</summary>
           <p>
-            Escribir un perfil desde cero es lento. Carga tu CV o tu LinkedIn, y corrige lo que haga
-            falta. El archivo se abre en tu navegador y no se sube a ninguna parte.
+            Al activarlo, el texto del archivo o el texto pegado se envía al servicio que
+            configuraste. Puedes dejarlo desactivado para leerlo solo en este navegador.
           </p>
-        </div>
-      </div>
-
-      {aiReady ? (
-        <div className="next-step">
-          <span className="num" aria-hidden="true">
-            ✦
-          </span>
-          <div style={{ flex: 1, minWidth: 220 }}>
-            <h3>Lectura con IA activada · {describeSettings(ai)}</h3>
-            <p>
-              {aiIsLocal
-                ? 'El modelo corre en tu computador, así que el documento no sale de tu equipo. Es más lento que uno de pago, pero gratis.'
-                : 'El texto del documento se manda al proveedor para interpretarlo, que es bastante más preciso que las reglas locales. Solo viaja lo que cargues acá, nada más de tu perfil.'}
-            </p>
-          </div>
-          <Toggle label="Usar IA" checked={useAi} onChange={setUseAi} />
-        </div>
-      ) : (
-        <div className="next-step">
-          <span className="num" aria-hidden="true">
-            ✦
-          </span>
-          <div style={{ flex: 1, minWidth: 220 }}>
-            <h3>¿La lectura te deja datos en campos equivocados?</h3>
-            <p>
-              El lector incluido adivina la estructura con reglas y se confunde con CV de columnas o
-              encabezados poco comunes. Con un modelo detrás, el mismo texto se interpreta. Puedes
-              usar uno gratis en tu propio computador o un servicio en la nube.
-            </p>
-          </div>
-          <Link to="/ajustes">
-            <Button>Configurar IA</Button>
-          </Link>
-        </div>
+          <Toggle
+            label="Enviar el texto al asistente para leerlo"
+            checked={useAi}
+            onChange={setUseAi}
+          />
+        </details>
       )}
-
-      <div className="grid">
-        {SOURCES.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            className="stat source-card"
-            onClick={() => {
-              setSource(s.id);
-              setError('');
-            }}
-            style={{
-              textAlign: 'left',
-              cursor: 'pointer',
-              font: 'inherit',
-              color: 'inherit',
-              borderColor: source === s.id ? 'var(--accent)' : 'var(--line)',
-              background: source === s.id ? 'var(--accent-soft)' : 'var(--bg-soft)',
-            }}
-          >
-            <span className="source-icon" aria-hidden="true">
-              {s.icon}
-            </span>
-            <b style={{ fontSize: 15 }}>{s.title}</b>
-            <span>{s.detail}</span>
-          </button>
-        ))}
-      </div>
-
-      {error && (
-        <div className="issue issue-error" style={{ marginTop: 16 }}>
-          <span className="issue-icon">✕</span>
-          <div>
-            <strong>{error}</strong>
-          </div>
-        </div>
-      )}
-
+      <details>
+        <summary>Prefiero copiar y pegar el texto</summary>
+        <TextArea
+          label="El contenido de mi currículum"
+          rows={8}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Tu nombre, contacto, trabajos anteriores, estudios…"
+        />
+        <Button
+          disabled={!text.trim() || busy}
+          onClick={async () => {
+            setBusy(true);
+            setError('');
+            try {
+              setParsed(await read(text));
+            } catch (e) {
+              setError(e instanceof Error ? e.message : 'No pudimos leer el texto.');
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          Leer este texto
+        </Button>
+      </details>
+      <details>
+        <summary>Tengo una copia de datos de LinkedIn</summary>
+        <p>
+          Puedes elegir el archivo ZIP que descargaste desde LinkedIn usando el botón de arriba. Si
+          no tienes esa copia, también puedes pegar el texto de tu perfil.
+        </p>
+      </details>
       {busy && (
-        <div className="issue issue-tip" style={{ marginTop: 16 }}>
-          <span className="issue-icon">…</span>
-          <div>
-            <strong>{busy}</strong>
-          </div>
-        </div>
+        <p role="status">
+          Estamos leyendo. Tus datos actuales no se modificarán hasta que confirmes.
+        </p>
       )}
-
-      {(source === 'archivo' || source === 'copia') && (
-        <Card
-          title={source === 'copia' ? 'Tu copia de Impulso' : 'Sube tu CV'}
-          subtitle={
-            source === 'copia'
-              ? 'El .json que descargaste desde Ajustes. Restaura todo tal cual estaba.'
-              : 'Acepta PDF y Word (.docx). El PDF tiene que tener texto seleccionable: si es una foto escaneada, no hay nada que leer.'
-          }
-        >
-          <div
-            className={`dropzone ${dragging ? 'dragging' : ''}`}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragging(true);
-            }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragging(false);
-              const file = e.dataTransfer.files?.[0];
-              if (file) void handleFile(file);
-            }}
-            onClick={() => fileRef.current?.click()}
-          >
-            <strong>Arrastra el archivo aquí</strong>
-            <span className="faint">o haz clic para buscarlo</span>
-          </div>
-          <input
-            ref={fileRef}
-            type="file"
-            hidden
-            accept={source === 'copia' ? '.json' : '.pdf,.docx,.txt'}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void handleFile(file);
-              e.target.value = '';
-            }}
-          />
-        </Card>
+      {error && (
+        <p role="alert" className="error-text">
+          {error}
+        </p>
       )}
-
-      {source === 'linkedin' && (
-        <>
-          <Card
-            title="La copia de datos de LinkedIn"
-            subtitle="La más fiel, porque son tus datos tal como los tiene LinkedIn, sin interpretar nada."
-          >
-            <ol className="steps">
-              <li>
-                En LinkedIn, entra a <b>Configuración y privacidad → Privacidad de los datos → Obtener
-                una copia de tus datos</b>.
-              </li>
-              <li>
-                Elige <b>«Descargar archivo más grande»</b> (la copia completa) y pide el archivo.
-              </li>
-              <li>Llega un correo con el ZIP, normalmente en unos minutos.</li>
-              <li>Suéltalo aquí sin descomprimir.</li>
-            </ol>
-            <div
-              className={`dropzone ${dragging ? 'dragging' : ''}`}
-              style={{ marginTop: 14 }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragging(true);
-              }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragging(false);
-                const file = e.dataTransfer.files?.[0];
-                if (file) void handleFile(file);
-              }}
-              onClick={() => fileRef.current?.click()}
-            >
-              <strong>Arrastra el ZIP de LinkedIn</strong>
-              <span className="faint">también sirve un CSV suelto</span>
-            </div>
-            <input
-              ref={fileRef}
-              type="file"
-              hidden
-              accept=".zip,.csv"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void handleFile(file);
-                e.target.value = '';
-              }}
-            />
-          </Card>
-
-          <Card title="¿No quieres esperar el correo?" subtitle="Hay dos atajos que sirven igual.">
-            <ol className="steps">
-              <li>
-                <b>El PDF de tu perfil:</b> en LinkedIn, bajo tu foto, «Más» → «Guardar en PDF».
-                Súbelo en «Mi CV en PDF o Word».
-              </li>
-              <li>
-                <b>Copiar y pegar:</b> selecciona tu perfil desde el nombre hasta las aptitudes y
-                pégalo en «Pegar texto de cualquier parte».
-              </li>
-            </ol>
-          </Card>
-        </>
+      {parsed && !hasData && (
+        <p role="status" className="notice">
+          No pudimos reconocer los datos. Puedes probar pegando el texto o{' '}
+          <Link to="/empezar">responder las preguntas de la guía</Link>.
+        </p>
       )}
-
-      {source === 'texto' && (
-        <Card
-          title="Pega el texto"
-          subtitle="Sirve cualquier cosa que describa a una persona: tu CV, tu perfil de LinkedIn, tu portafolio, un perfil de una web de empleo. Seleccionas todo, copias y pegas; la basura del sitio se descarta sola."
-        >
-          {!withAi && (
-            <div className="issue issue-tip" style={{ marginBottom: 12 }}>
-              <span className="issue-icon">i</span>
-              <div>
-                <strong>Sin IA conviene que sea un CV con secciones</strong>
-                <p>
-                  El lector incluido busca encabezados como Experiencia, Educación y Habilidades. Si
-                  pegas una página web con menús y botones, se va a perder. Con IA no importa.
-                </p>
-              </div>
-            </div>
-          )}
-          <TextArea
-            label="Texto pegado"
-            rows={14}
-            value={pasted}
-            onChange={(e) => setPasted(e.target.value)}
-            placeholder={'María Pérez\nAnalista de Datos\nmaria@correo.cl · +56 9 1234 5678 · Osorno\n\nEXPERIENCIA\nAnalista de Datos — Retail Sur · mar 2021 - Actualidad\n• Automaticé el reporte semanal…'}
-          />
-          {readButtons}
-        </Card>
-      )}
-
-      {!source && (
-        <Card title="¿Y si no tengo nada de esto?">
-          <p className="muted" style={{ fontSize: 14, maxWidth: '70ch' }}>
-            Se puede empezar de cero: el perfil te va guiando campo por campo y el asistente de
-            redacción arma los logros a partir de tres preguntas. También puedes cargar un perfil de
-            ejemplo para ver cómo queda todo antes de escribir lo tuyo.
+      {parsed && hasData && (
+        <section className="form-sheet">
+          <span className="eyebrow">Revisa antes de guardar</span>
+          <h2>Esto es lo que encontramos.</h2>
+          <p>
+            {parsed.personal.fullName || 'No reconocimos el nombre'} ·{' '}
+            {parsed.personal.headline || 'Trabajo sin identificar'}
           </p>
-          <div className="row" style={{ marginTop: 14 }}>
-            <Button variant="primary" onClick={() => navigate('/perfil')}>
-              Empezar de cero
-            </Button>
+          <p className="field-hint">
+            La lectura puede equivocarse. Después podrás corregir cada dato.
+          </p>
+          <div className="stack">
+            {sections
+              .filter((k) => countOf(parsed, k) > 0)
+              .map((k) => (
+                <label className="import-section" key={k}>
+                  <input
+                    type="checkbox"
+                    checked={include.has(k)}
+                    onChange={() =>
+                      setInclude((prev) => {
+                        const n = new Set(prev);
+                        if (n.has(k)) n.delete(k);
+                        else n.add(k);
+                        return n;
+                      })
+                    }
+                  />
+                  <span>
+                    <strong>{SECTION_LABELS[k]}</strong>
+                    <small>
+                      {k === 'personal'
+                        ? Object.values(parsed.personal).filter(Boolean).join(' · ')
+                        : parsed[k]
+                            .map((v) =>
+                              'role' in v
+                                ? v.role
+                                : 'degree' in v
+                                  ? v.degree
+                                  : 'name' in v
+                                    ? v.name
+                                    : '',
+                            )
+                            .filter(Boolean)
+                            .join(' · ')}
+                    </small>
+                  </span>
+                  <span>{countOf(parsed, k)}</span>
+                </label>
+              ))}
           </div>
-        </Card>
+          {!!state.profile.personal.fullName && (
+            <Select
+              label="¿Qué hacer con los datos que ya tienes?"
+              value={mode}
+              onChange={(e) => setMode(e.target.value as ImportMode)}
+            >
+              <option value="agregar">Conservar mis datos y agregar lo nuevo</option>
+              <option value="reemplazar">Reemplazar las secciones seleccionadas</option>
+            </Select>
+          )}
+          {parsed.notes.length > 0 && (
+            <details>
+              <summary>Observaciones de la lectura</summary>
+              {parsed.notes.map((n, i) => (
+                <p key={i}>{n}</p>
+              ))}
+            </details>
+          )}
+          <Button
+            variant="primary"
+            disabled={!sections.some((k) => include.has(k) && countOf(parsed, k) > 0)}
+            onClick={() => {
+              replaceAll(applyParsed(state, parsed, mode, include));
+              nav('/perfil');
+            }}
+          >
+            Guardar y revisar mis datos
+            <ArrowRight size={18} />
+          </Button>
+        </section>
       )}
-    </>
+      <p className="gentle-note">
+        ¿No tienes un archivo?{' '}
+        <Link to="/empezar" className="text-link">
+          Podemos empezar desde cero
+          <ArrowRight size={17} />
+        </Link>
+      </p>
+    </div>
   );
 }

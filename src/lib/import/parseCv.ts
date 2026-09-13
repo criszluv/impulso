@@ -44,18 +44,46 @@ export function emptyParsed(): ParsedCv {
 }
 
 const MONTHS: Record<string, number> = {
-  ene: 1, enero: 1, jan: 1, january: 1,
-  feb: 2, febrero: 2, february: 2,
-  mar: 3, marzo: 3, march: 3,
-  abr: 4, abril: 4, apr: 4, april: 4,
-  may: 5, mayo: 5,
-  jun: 6, junio: 6, june: 6,
-  jul: 7, julio: 7, july: 7,
-  ago: 8, agosto: 8, aug: 8, august: 8,
-  sep: 9, sept: 9, septiembre: 9, september: 9,
-  oct: 10, octubre: 10, october: 10,
-  nov: 11, noviembre: 11, november: 11,
-  dic: 12, diciembre: 12, dec: 12, december: 12,
+  ene: 1,
+  enero: 1,
+  jan: 1,
+  january: 1,
+  feb: 2,
+  febrero: 2,
+  february: 2,
+  mar: 3,
+  marzo: 3,
+  march: 3,
+  abr: 4,
+  abril: 4,
+  apr: 4,
+  april: 4,
+  may: 5,
+  mayo: 5,
+  jun: 6,
+  junio: 6,
+  june: 6,
+  jul: 7,
+  julio: 7,
+  july: 7,
+  ago: 8,
+  agosto: 8,
+  aug: 8,
+  august: 8,
+  sep: 9,
+  sept: 9,
+  septiembre: 9,
+  september: 9,
+  oct: 10,
+  octubre: 10,
+  october: 10,
+  nov: 11,
+  noviembre: 11,
+  november: 11,
+  dic: 12,
+  diciembre: 12,
+  dec: 12,
+  december: 12,
 };
 
 const PRESENT = /(actualidad|presente|actual|present|current|hoy|a la fecha)/i;
@@ -120,18 +148,88 @@ type SectionId =
   | 'otro';
 
 const HEADINGS: Array<{ id: SectionId; words: string[] }> = [
-  { id: 'resumen', words: ['perfil', 'perfil profesional', 'resumen', 'resumen profesional', 'extracto', 'acerca de', 'sobre mi', 'objetivo', 'summary', 'about', 'profile', 'objective'] },
-  { id: 'experiencia', words: ['experiencia', 'experiencia laboral', 'experiencia profesional', 'trayectoria', 'trayectoria laboral', 'historial laboral', 'empleo', 'work experience', 'experience', 'employment'] },
-  { id: 'educacion', words: ['educacion', 'formacion', 'formacion academica', 'estudios', 'antecedentes academicos', 'education', 'academic background'] },
-  { id: 'habilidades', words: ['habilidades', 'competencias', 'conocimientos', 'aptitudes', 'aptitudes principales', 'skills', 'technical skills', 'competencies', 'herramientas', 'stack'] },
+  {
+    id: 'resumen',
+    words: [
+      'perfil',
+      'perfil profesional',
+      'resumen',
+      'resumen profesional',
+      'extracto',
+      'acerca de',
+      'sobre mi',
+      'objetivo',
+      'summary',
+      'about',
+      'profile',
+      'objective',
+    ],
+  },
+  {
+    id: 'experiencia',
+    words: [
+      'experiencia',
+      'experiencia laboral',
+      'experiencia profesional',
+      'trayectoria',
+      'trayectoria laboral',
+      'historial laboral',
+      'empleo',
+      'work experience',
+      'experience',
+      'employment',
+    ],
+  },
+  {
+    id: 'educacion',
+    words: [
+      'educacion',
+      'formacion',
+      'formacion academica',
+      'estudios',
+      'antecedentes academicos',
+      'education',
+      'academic background',
+    ],
+  },
+  {
+    id: 'habilidades',
+    words: [
+      'habilidades',
+      'competencias',
+      'conocimientos',
+      'aptitudes',
+      'aptitudes principales',
+      'skills',
+      'technical skills',
+      'competencies',
+      'herramientas',
+      'stack',
+    ],
+  },
   { id: 'idiomas', words: ['idiomas', 'languages'] },
   { id: 'proyectos', words: ['proyectos', 'projects', 'portafolio', 'portfolio'] },
-  { id: 'certificaciones', words: ['certificaciones', 'certificados', 'cursos', 'licencias y certificaciones', 'capacitaciones', 'certifications', 'courses', 'licenses'] },
+  {
+    id: 'certificaciones',
+    words: [
+      'certificaciones',
+      'certificados',
+      'cursos',
+      'licencias y certificaciones',
+      'capacitaciones',
+      'certifications',
+      'courses',
+      'licenses',
+    ],
+  },
   { id: 'contacto', words: ['contacto', 'datos personales', 'datos de contacto', 'contact'] },
 ];
 
 function headingFor(line: string): SectionId | null {
-  const flat = normalize(line).replace(/[:·|•\-–—_]+$/g, '').replace(/^[:·|•\-–—_]+/g, '').trim();
+  const flat = normalize(line)
+    .replace(/[:·|•\-–—_]+$/g, '')
+    .replace(/^[:·|•\-–—_]+/g, '')
+    .trim();
   if (!flat || flat.length > 42) return null;
   if (/\d{4}/.test(flat)) return null;
   for (const h of HEADINGS) {
@@ -173,20 +271,118 @@ function joinWrapped(lines: string[]): string[] {
 }
 
 const ROLE_WORDS = [
-  'ingenier', 'analista', 'desarrollador', 'desarrolladora', 'programador', 'jefe', 'jefa',
-  'gerente', 'asistente', 'auxiliar', 'tecnico', 'tecnica', 'operario', 'operaria', 'docente',
-  'profesor', 'enfermer', 'contador', 'contadora', 'disenador', 'disenadora', 'encargad',
-  'supervisor', 'coordinador', 'coordinadora', 'administrativo', 'administrativa', 'practicante',
-  'ejecutivo', 'ejecutiva', 'secretari', 'chofer', 'conductor', 'cajero', 'cajera', 'bodeguero',
-  'mecanico', 'electricista', 'soldador', 'garzon', 'recepcionista', 'vendedor', 'vendedora',
-  'consultor', 'consultora', 'especialista', 'lider', 'director', 'directora', 'abogad',
-  'psicolog', 'kinesiolog', 'arquitect', 'constructor', 'prevencionista', 'community',
-  'manager', 'engineer', 'developer', 'designer', 'analyst', 'intern', 'trainee', 'freelance',
+  'ingenier',
+  'analista',
+  'desarrollador',
+  'desarrolladora',
+  'programador',
+  'jefe',
+  'jefa',
+  'gerente',
+  'asistente',
+  'auxiliar',
+  'tecnico',
+  'tecnica',
+  'operario',
+  'operaria',
+  'docente',
+  'profesor',
+  'enfermer',
+  'contador',
+  'contadora',
+  'disenador',
+  'disenadora',
+  'encargad',
+  'supervisor',
+  'coordinador',
+  'coordinadora',
+  'administrativo',
+  'administrativa',
+  'practicante',
+  'ejecutivo',
+  'ejecutiva',
+  'secretari',
+  'chofer',
+  'conductor',
+  'cajero',
+  'cajera',
+  'bodeguero',
+  'mecanico',
+  'electricista',
+  'soldador',
+  'garzon',
+  'recepcionista',
+  'vendedor',
+  'vendedora',
+  'consultor',
+  'consultora',
+  'especialista',
+  'lider',
+  'director',
+  'directora',
+  'abogad',
+  'psicolog',
+  'kinesiolog',
+  'arquitect',
+  'constructor',
+  'prevencionista',
+  'community',
+  'manager',
+  'engineer',
+  'developer',
+  'designer',
+  'analyst',
+  'intern',
+  'trainee',
+  'freelance',
 ];
 
-const COMPANY_WORDS = ['s.a', 'spa', 'ltda', 'limitada', 'e.i.r.l', 'inc', 'llc', 'corp', 'group', 'grupo', 'consultora', 'agencia', 'universidad', 'instituto', 'fundacion', 'municipalidad', 'banco', 'clinica', 'hospital', 'colegio', 'empresa'];
+const COMPANY_WORDS = [
+  's.a',
+  'spa',
+  'ltda',
+  'limitada',
+  'e.i.r.l',
+  'inc',
+  'llc',
+  'corp',
+  'group',
+  'grupo',
+  'consultora',
+  'agencia',
+  'universidad',
+  'instituto',
+  'fundacion',
+  'municipalidad',
+  'banco',
+  'clinica',
+  'hospital',
+  'colegio',
+  'empresa',
+];
 
-const PLACE_WORDS = ['remoto', 'hibrido', 'presencial', 'santiago', 'osorno', 'valparaiso', 'concepcion', 'temuco', 'puerto montt', 'antofagasta', 'la serena', 'rancagua', 'talca', 'iquique', 'chile', 'argentina', 'peru', 'colombia', 'mexico', 'espana'];
+const PLACE_WORDS = [
+  'remoto',
+  'hibrido',
+  'presencial',
+  'santiago',
+  'osorno',
+  'valparaiso',
+  'concepcion',
+  'temuco',
+  'puerto montt',
+  'antofagasta',
+  'la serena',
+  'rancagua',
+  'talca',
+  'iquique',
+  'chile',
+  'argentina',
+  'peru',
+  'colombia',
+  'mexico',
+  'espana',
+];
 
 function looksLikeRole(text: string): boolean {
   const flat = normalize(text);
@@ -291,9 +487,15 @@ function blocksByDate(lines: string[]): Block[] {
 }
 
 function headerParts(header: string[]): string[] {
-  const strong = header.flatMap((line) => line.split(STRONG_SEP)).map((p) => p.trim()).filter(Boolean);
+  const strong = header
+    .flatMap((line) => line.split(STRONG_SEP))
+    .map((p) => p.trim())
+    .filter(Boolean);
   if (strong.length > 1) return strong;
-  return header.flatMap((line) => line.split(WEAK_SEP)).map((p) => p.trim()).filter(Boolean);
+  return header
+    .flatMap((line) => line.split(WEAK_SEP))
+    .map((p) => p.trim())
+    .filter(Boolean);
 }
 
 function toBullets(body: string[]): string[] {
@@ -321,7 +523,8 @@ const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.]{2,}/;
 const PHONE_RE = /(\+?\d[\d\s().-]{7,17}\d)/;
 const LINKEDIN_RE = /(?:https?:\/\/)?(?:[\w.]+\.)?linkedin\.com\/in\/[\w%\-.]+/i;
 const GITHUB_RE = /(?:https?:\/\/)?(?:www\.)?github\.com\/[\w-]+/i;
-const URL_RE = /(?:https?:\/\/)?(?:www\.)?[\w-]+\.(?:com|cl|dev|io|net|org|me|app|co)(?:\/[\w%\-./]*)?/i;
+const URL_RE =
+  /(?:https?:\/\/)?(?:www\.)?[\w-]+\.(?:com|cl|dev|io|net|org|me|app|co)(?:\/[\w%\-./]*)?/i;
 
 function looksLikeName(line: string): boolean {
   const words = line.trim().split(/\s+/);
@@ -373,7 +576,14 @@ export function parseCvText(input: string): ParsedCv {
     result.personal.fullName = head[nameIndex].trim();
     const after = head
       .slice(nameIndex + 1)
-      .find((l) => l.length > 4 && l.length < 90 && !EMAIL_RE.test(l) && !PHONE_RE.test(l) && !URL_RE.test(l));
+      .find(
+        (l) =>
+          l.length > 4 &&
+          l.length < 90 &&
+          !EMAIL_RE.test(l) &&
+          !PHONE_RE.test(l) &&
+          !URL_RE.test(l),
+      );
     if (after) result.personal.headline = after.trim();
   } else {
     result.notes.push('No pude identificar el nombre; revísalo antes de guardar.');
@@ -433,7 +643,8 @@ export function parseCvText(input: string): ParsedCv {
       id: uid('edu'),
       degree,
       institution: institutionIndex !== -1 ? parts[institutionIndex] : (parts[1] ?? ''),
-      location: parts.find((p, i) => i !== institutionIndex && p !== degree && looksLikePlace(p)) ?? '',
+      location:
+        parts.find((p, i) => i !== institutionIndex && p !== degree && looksLikePlace(p)) ?? '',
       startDate: block.range.startDate,
       endDate: block.range.endDate,
       current: block.range.current,
@@ -453,7 +664,8 @@ export function parseCvText(input: string): ParsedCv {
       loose.push(...splitSkills(text));
     }
   }
-  if (loose.length) grouped.unshift({ id: uid('sk'), name: 'Habilidades', items: [...new Set(loose)] });
+  if (loose.length)
+    grouped.unshift({ id: uid('sk'), name: 'Habilidades', items: [...new Set(loose)] });
   result.skills = grouped.filter((g) => g.items.length);
 
   for (const line of sections.get('idiomas') ?? []) {

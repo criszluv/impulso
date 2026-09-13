@@ -25,6 +25,15 @@ export const emptyProfile: Profile = {
 
 export const initialState: AppState = {
   version: 1,
+  preferences: {
+    role: '',
+    city: '',
+    travel: '',
+    schedule: '',
+    experience: '',
+    step: 0,
+    completed: false,
+  },
   profile: emptyProfile,
   applications: [],
   cv: {
@@ -41,7 +50,7 @@ export const initialState: AppState = {
   },
   letters: [],
   answers: [],
-  theme: 'dark',
+  theme: 'light',
 };
 
 /** Perfil de ejemplo para ver la app funcionando sin escribir nada. */
@@ -108,9 +117,17 @@ export function demoState(): AppState {
         },
       ],
       skills: [
-        { id: uid('sk'), name: 'Lenguajes', items: ['TypeScript', 'JavaScript', 'HTML', 'CSS', 'SQL'] },
+        {
+          id: uid('sk'),
+          name: 'Lenguajes',
+          items: ['TypeScript', 'JavaScript', 'HTML', 'CSS', 'SQL'],
+        },
         { id: uid('sk'), name: 'Frameworks', items: ['React', 'Next.js', 'Node.js', 'Vitest'] },
-        { id: uid('sk'), name: 'Herramientas', items: ['Git', 'Figma', 'Docker', 'GitHub Actions'] },
+        {
+          id: uid('sk'),
+          name: 'Herramientas',
+          items: ['Git', 'Figma', 'Docker', 'GitHub Actions'],
+        },
       ],
       languages: [
         { id: uid('lang'), name: 'Español', level: 'Nativo' },

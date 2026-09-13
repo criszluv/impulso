@@ -1,5 +1,11 @@
-import { useState } from 'react';
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
+import { useId, useState } from 'react';
+import type {
+  ButtonHTMLAttributes,
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+} from 'react';
 import type { Issue } from '../lib/analysis';
 
 export function Card({
@@ -37,7 +43,13 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 export function Button({ variant = 'subtle', size = 'md', className = '', ...rest }: ButtonProps) {
-  return <button className={`btn btn-${variant} btn-${size} ${className}`.trim()} {...rest} />;
+  return (
+    <button
+      type="button"
+      className={`btn btn-${variant} btn-${size} ${className}`.trim()}
+      {...rest}
+    />
+  );
 }
 
 export function Field({
@@ -45,47 +57,86 @@ export function Field({
   hint,
   children,
   wide,
+  htmlFor,
 }: {
   label: string;
   hint?: string;
   children: ReactNode;
   wide?: boolean;
+  htmlFor?: string;
 }) {
+  const groupId = useId();
   return (
-    <label className={`field ${wide ? 'field-wide' : ''}`.trim()}>
-      <span className="field-label">{label}</span>
+    <div
+      className={'field ' + (wide ? 'field-wide' : '')}
+      role={htmlFor ? undefined : 'group'}
+      aria-labelledby={htmlFor ? undefined : groupId}
+    >
+      {htmlFor ? (
+        <label className="field-label" htmlFor={htmlFor}>
+          {label}
+        </label>
+      ) : (
+        <span id={groupId} className="field-label">
+          {label}
+        </span>
+      )}
       {children}
-      {hint && <span className="field-hint">{hint}</span>}
-    </label>
+      {hint && (
+        <span className="field-hint" id={htmlFor ? htmlFor + '-hint' : undefined}>
+          {hint}
+        </span>
+      )}
+    </div>
   );
 }
-
-type TextProps = InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: string; wide?: boolean };
-
+type TextProps = InputHTMLAttributes<HTMLInputElement> & {
+  label: string;
+  hint?: string;
+  wide?: boolean;
+};
 export function TextInput({ label, hint, wide, ...rest }: TextProps) {
+  const uid = useId(),
+    id = rest.id || uid;
   return (
-    <Field label={label} hint={hint} wide={wide}>
-      <input className="input" {...rest} />
+    <Field label={label} hint={hint} wide={wide} htmlFor={id}>
+      <input
+        className="input"
+        {...rest}
+        id={id}
+        aria-describedby={hint ? id + '-hint' : undefined}
+      />
     </Field>
   );
 }
-
 type AreaProps = TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string; hint?: string };
-
 export function TextArea({ label, hint, rows = 4, ...rest }: AreaProps) {
+  const uid = useId(),
+    id = rest.id || uid;
   return (
-    <Field label={label} hint={hint} wide>
-      <textarea className="input textarea" rows={rows} {...rest} />
+    <Field label={label} hint={hint} wide htmlFor={id}>
+      <textarea
+        className="input textarea"
+        rows={rows}
+        {...rest}
+        id={id}
+        aria-describedby={hint ? id + '-hint' : undefined}
+      />
     </Field>
   );
 }
-
 type SelectProps = SelectHTMLAttributes<HTMLSelectElement> & { label: string; hint?: string };
-
 export function Select({ label, hint, children, ...rest }: SelectProps) {
+  const uid = useId(),
+    id = rest.id || uid;
   return (
-    <Field label={label} hint={hint}>
-      <select className="input" {...rest}>
+    <Field label={label} hint={hint} htmlFor={id}>
+      <select
+        className="input"
+        {...rest}
+        id={id}
+        aria-describedby={hint ? id + '-hint' : undefined}
+      >
         {children}
       </select>
     </Field>
@@ -150,12 +201,17 @@ export function TagInput({
         {value.map((tag) => (
           <span className="tag" key={tag}>
             {tag}
-            <button type="button" onClick={() => onChange(value.filter((v) => v !== tag))} aria-label={`Quitar ${tag}`}>
+            <button
+              type="button"
+              onClick={() => onChange(value.filter((v) => v !== tag))}
+              aria-label={`Quitar ${tag}`}
+            >
               ×
             </button>
           </span>
         ))}
         <input
+          aria-label={label}
           className="tag-field"
           value={draft}
           placeholder={value.length ? '' : placeholder}
@@ -175,11 +231,22 @@ export function TagInput({
   );
 }
 
-export function ScoreRing({ value, label, size = 96 }: { value: number; label?: string; size?: number }) {
+export function ScoreRing({
+  value,
+  label,
+  size = 96,
+}: {
+  value: number;
+  label?: string;
+  size?: number;
+}) {
   const tone = value >= 80 ? 'good' : value >= 50 ? 'mid' : 'low';
   return (
     <div className={`ring ring-${tone}`} style={{ width: size, height: size }}>
-      <div className="ring-fill" style={{ background: `conic-gradient(var(--ring) ${value * 3.6}deg, var(--ring-bg) 0deg)` }} />
+      <div
+        className="ring-fill"
+        style={{ background: `conic-gradient(var(--ring) ${value * 3.6}deg, var(--ring-bg) 0deg)` }}
+      />
       <div className="ring-inner">
         <strong>{value}</strong>
         {label && <small>{label}</small>}
@@ -209,7 +276,15 @@ export function IssueList({ issues }: { issues: Issue[] }) {
   );
 }
 
-export function Empty({ title, text, action }: { title: string; text: string; action?: ReactNode }) {
+export function Empty({
+  title,
+  text,
+  action,
+}: {
+  title: string;
+  text: string;
+  action?: ReactNode;
+}) {
   return (
     <div className="empty">
       <h3>{title}</h3>
@@ -250,22 +325,30 @@ export function ConfirmButton({
 }
 
 export function CopyButton({ text, label = 'Copiar' }: { text: string; label?: string }) {
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState(false),
+    [error, setError] = useState(false);
   return (
-    <Button
-      size="sm"
-      variant="ghost"
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(text);
-        } catch {
-          return;
-        }
-        setDone(true);
-        window.setTimeout(() => setDone(false), 1500);
-      }}
-    >
-      {done ? 'Copiado ✓' : label}
-    </Button>
+    <span>
+      <Button
+        size="sm"
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(text);
+            setDone(true);
+            setError(false);
+          } catch {
+            setError(true);
+          }
+        }}
+      >
+        {done ? 'Copiado' : label}
+      </Button>
+      {error && (
+        <span className="field-hint" role="status">
+          No se pudo copiar automáticamente. Selecciona el texto y usa la opción Copiar de tu
+          dispositivo.
+        </span>
+      )}
+    </span>
   );
 }

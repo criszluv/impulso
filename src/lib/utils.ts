@@ -2,10 +2,7 @@ export function uid(prefix = 'id'): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}${Date.now().toString(36).slice(-4)}`;
 }
 
-const MONTHS = [
-  'ene', 'feb', 'mar', 'abr', 'may', 'jun',
-  'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
-];
+const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
 /** Formatea "2023-04" como "abr 2023". Devuelve '' si el valor no sirve. */
 export function formatMonth(value: string): string {
@@ -27,7 +24,7 @@ export function formatRange(start: string, end: string, current: boolean): strin
 
 export function formatDate(iso: string): string {
   if (!iso) return '';
-  const d = new Date(iso);
+  const d = new Date(iso.length === 10 ? iso + 'T12:00:00' : iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' });
 }

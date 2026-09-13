@@ -26,7 +26,10 @@ function isOllama(baseUrl: string): boolean {
 
 /** Los modelos pequeños envuelven el JSON en explicaciones o en ```json. */
 function extractJson(raw: string): unknown {
-  const text = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+  const text = raw
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```\s*$/, '');
   try {
     return JSON.parse(text);
   } catch {
@@ -35,16 +38,24 @@ function extractJson(raw: string): unknown {
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
   if (start === -1 || end <= start) {
-    throw new AiError('El modelo no devolvió JSON. Prueba con un modelo más grande o con otro proveedor.');
+    throw new AiError(
+      'El modelo no devolvió JSON. Prueba con un modelo más grande o con otro proveedor.',
+    );
   }
   try {
     return JSON.parse(text.slice(start, end + 1));
   } catch {
-    throw new AiError('El JSON que devolvió el modelo venía incompleto o mal formado. Vuelve a intentar.');
+    throw new AiError(
+      'El JSON que devolvió el modelo venía incompleto o mal formado. Vuelve a intentar.',
+    );
   }
 }
 
-async function post(url: string, headers: Record<string, string>, body: unknown): Promise<Response> {
+async function post(
+  url: string,
+  headers: Record<string, string>,
+  body: unknown,
+): Promise<Response> {
   try {
     return await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
   } catch {

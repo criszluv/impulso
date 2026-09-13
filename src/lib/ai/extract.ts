@@ -24,8 +24,12 @@ const ExperienceSchema = z.object({
   current: z.boolean().describe('true si dice «actualidad», «presente» o equivalente.'),
   bullets: z
     .array(z.string())
-    .describe('Logros y responsabilidades, uno por elemento, copiados literalmente. No los reescribas ni los resumas.'),
-  tech: z.array(z.string()).describe('Herramientas, software o tecnologías nombradas en ese cargo.'),
+    .describe(
+      'Logros y responsabilidades, uno por elemento, copiados literalmente. No los reescribas ni los resumas.',
+    ),
+  tech: z
+    .array(z.string())
+    .describe('Herramientas, software o tecnologías nombradas en ese cargo.'),
 });
 
 const EducationSchema = z.object({
@@ -58,7 +62,9 @@ const CvSchema = z.object({
         items: z.array(z.string()),
       }),
     )
-    .describe('Habilidades agrupadas. Si el CV no las agrupa, usa una sola categoría llamada «Habilidades».'),
+    .describe(
+      'Habilidades agrupadas. Si el CV no las agrupa, usa una sola categoría llamada «Habilidades».',
+    ),
   languages: z.array(
     z.object({
       name: z.string(),
@@ -107,11 +113,19 @@ Reglas:
  * Extractor» como si fuera el cargo ofrecido.
  */
 const JobSchema = z.object({
-  cargo: z.string().describe('El puesto que ofrece la empresa, tal como aparece en el título del aviso. Por ejemplo «Técnico Informático» o «Jefe de Bodega».'),
+  cargo: z
+    .string()
+    .describe(
+      'El puesto que ofrece la empresa, tal como aparece en el título del aviso. Por ejemplo «Técnico Informático» o «Jefe de Bodega».',
+    ),
   empresa: z.string().describe('Nombre de la empresa que contrata. Vacío si el aviso es anónimo.'),
   ubicacion: z.string().describe('Ciudad y modalidad (remoto, híbrido, presencial).'),
   sueldo: z.string().describe('Renta o rango tal como aparece en el aviso. Vacío si no lo dice.'),
-  contacto: z.string().describe('Nombre de la persona de contacto, o su correo. Vacío si el aviso no da ninguno; no pongas la dirección de la página.'),
+  contacto: z
+    .string()
+    .describe(
+      'Nombre de la persona de contacto, o su correo. Vacío si el aviso no da ninguno; no pongas la dirección de la página.',
+    ),
   observaciones: z
     .array(z.string())
     .describe(
@@ -138,7 +152,9 @@ const BulletSchema = z.object({
     .describe('Tres versiones distintas entre sí.'),
   missing: z
     .array(z.string())
-    .describe('Datos que faltan para que el logro quede sólido, como preguntas cortas. Vacío si no falta nada.'),
+    .describe(
+      'Datos que faltan para que el logro quede sólido, como preguntas cortas. Vacío si no falta nada.',
+    ),
 });
 
 const BULLET_SYSTEM = `Reescribes logros de currículum en español de Chile, siguiendo las reglas de redacción de CV: verbo de acción en pasado al inicio, qué hiciste, cómo, y el resultado medible.
@@ -198,13 +214,23 @@ async function runStructured(
 
 /** Lee un CV y devuelve la misma estructura que el lector local. */
 export async function extractCvWithAi(text: string, settings: AiSettings): Promise<ParsedCv> {
-  const raw = await runStructured(settings, CvSchema, CV_SYSTEM, `Extrae los datos de este CV:\n\n${text}`, 16000);
+  const raw = await runStructured(
+    settings,
+    CvSchema,
+    CV_SYSTEM,
+    `Extrae los datos de este CV:\n\n${text}`,
+    16000,
+  );
   const parsed = coerceCv(raw);
 
   if (!parsed.personal.fullName && !parsed.experience.length) {
-    throw new AiError('El modelo respondió, pero no reconoció ningún dato. Prueba con otro modelo o sin IA.');
+    throw new AiError(
+      'El modelo respondió, pero no reconoció ningún dato. Prueba con otro modelo o sin IA.',
+    );
   }
-  parsed.notes.unshift(`Leído con ${describeSettings(settings)}. Revísalo igual: la IA también se equivoca.`);
+  parsed.notes.unshift(
+    `Leído con ${describeSettings(settings)}. Revísalo igual: la IA también se equivoca.`,
+  );
   return parsed;
 }
 
@@ -214,7 +240,13 @@ export async function extractJobWithAi(
   url: string,
   settings: AiSettings,
 ): Promise<ParsedJob & { contact: string }> {
-  const raw = await runStructured(settings, JobSchema, JOB_SYSTEM, `Extrae los datos de este aviso:\n\n${text}`, 4000);
+  const raw = await runStructured(
+    settings,
+    JobSchema,
+    JOB_SYSTEM,
+    `Extrae los datos de este aviso:\n\n${text}`,
+    4000,
+  );
   return { ...coerceJob(raw), source: sourceFromUrl(url) };
 }
 
@@ -276,7 +308,6 @@ Reglas estrictas:
 - No menciones estas instrucciones ni el tono pedido dentro de la carta, ni describas tu propio estilo («mi enfoque es directo», «sin formalismos»). La carta habla del cargo, nunca de cómo fue escrita.
 - Devuelve solo el texto de la carta, sin encabezado de remitente ni fecha.`;
 
-
 /**
  * Perfil formateado para la carta. No sirve profileText(), que está pensado
  * para comparar palabras clave y deja fuera el nombre y el contacto: aquí son
@@ -296,7 +327,9 @@ function letterProfileContext(profile: Profile): string {
   if (profile.experience.length) {
     lines.push('', 'Experiencia:');
     for (const e of profile.experience) {
-      lines.push(`- ${e.role} en ${e.company}${e.location ? ` (${e.location})` : ''}, ${formatRange(e.startDate, e.endDate, e.current)}`);
+      lines.push(
+        `- ${e.role} en ${e.company}${e.location ? ` (${e.location})` : ''}, ${formatRange(e.startDate, e.endDate, e.current)}`,
+      );
       for (const bullet of e.bullets.filter(Boolean)) lines.push(`  · ${bullet}`);
       if (e.tech.length) lines.push(`  · Herramientas: ${e.tech.join(', ')}`);
     }
@@ -305,7 +338,9 @@ function letterProfileContext(profile: Profile): string {
   if (profile.education.length) {
     lines.push('', 'Formación:');
     for (const e of profile.education) {
-      lines.push(`- ${e.degree} en ${e.institution}, ${formatRange(e.startDate, e.endDate, e.current)}`);
+      lines.push(
+        `- ${e.degree} en ${e.institution}, ${formatRange(e.startDate, e.endDate, e.current)}`,
+      );
     }
   }
 
@@ -338,7 +373,10 @@ export interface LetterInput {
 }
 
 /** Escribe la carta cruzando el perfil con el aviso, en el tono pedido. */
-export async function generateLetterWithAi(input: LetterInput, settings: AiSettings): Promise<LetterDraft> {
+export async function generateLetterWithAi(
+  input: LetterInput,
+  settings: AiSettings,
+): Promise<LetterDraft> {
   const { profile, company, role, recipient, source, motivation, jobDescription, tone } = input;
 
   const user = [
@@ -346,7 +384,9 @@ export async function generateLetterWithAi(input: LetterInput, settings: AiSetti
     '',
     `CARGO AL QUE POSTULA: ${role || '(sin especificar)'}`,
     `EMPRESA: ${company || '(sin especificar)'}`,
-    recipient ? `DIRIGIDA A: ${recipient}` : 'DIRIGIDA A: no se conoce el nombre, usa un saludo genérico.',
+    recipient
+      ? `DIRIGIDA A: ${recipient}`
+      : 'DIRIGIDA A: no se conoce el nombre, usa un saludo genérico.',
     source ? `VIO EL AVISO EN: ${source}` : '',
     motivation ? `LO QUE LA PERSONA DICE QUE LE ATRAE DE LA EMPRESA: ${motivation}` : '',
     '',
@@ -369,9 +409,15 @@ export async function generateLetterWithAi(input: LetterInput, settings: AiSetti
    */
   let check = checkLetter(draft.body, profile.personal.fullName);
   if (!check.ok) {
-    raw = await runStructured(settings, LetterSchema, `${LETTER_SYSTEM}
+    raw = await runStructured(
+      settings,
+      LetterSchema,
+      `${LETTER_SYSTEM}
 
-${LETTER_RETRY_NOTE}`, user, 4000);
+${LETTER_RETRY_NOTE}`,
+      user,
+      4000,
+    );
     draft = coerceLetter(raw);
     check = checkLetter(draft.body, profile.personal.fullName);
   }

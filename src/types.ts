@@ -77,12 +77,7 @@ export interface Profile {
   certifications: Certification[];
 }
 
-export type ApplicationStatus =
-  | 'guardada'
-  | 'postulada'
-  | 'entrevista'
-  | 'oferta'
-  | 'rechazada';
+export type ApplicationStatus = 'guardada' | 'postulada' | 'entrevista' | 'oferta' | 'rechazada';
 
 export interface Application {
   id: Id;
@@ -144,7 +139,18 @@ export interface StarAnswer {
   result: string;
 }
 
+export interface SearchPreferences {
+  role: string;
+  city: string;
+  travel: string;
+  schedule: string;
+  experience: 'si' | 'no' | '';
+  step: number;
+  completed: boolean;
+}
+
 export interface AppState {
+  preferences: SearchPreferences;
   version: number;
   profile: Profile;
   applications: Application[];

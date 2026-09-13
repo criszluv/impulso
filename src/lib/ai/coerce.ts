@@ -125,7 +125,11 @@ export function coerceCv(raw: unknown): ParsedCv {
   result.skills = list(data.skillGroups)
     .map((item) => {
       const g = asObject(item);
-      return { id: uid('sk'), name: str(g.name) || 'Habilidades', items: strings(g.items) } satisfies SkillGroup;
+      return {
+        id: uid('sk'),
+        name: str(g.name) || 'Habilidades',
+        items: strings(g.items),
+      } satisfies SkillGroup;
     })
     .filter((g) => g.items.length);
 

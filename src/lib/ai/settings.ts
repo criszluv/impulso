@@ -66,7 +66,8 @@ export const AI_PRESETS: AiPreset[] = [
     cost: 'no',
     needsKey: false,
     keyUrl: 'https://lmstudio.ai',
-    detail: 'Igual que Ollama pero con interfaz gráfica. Levanta el servidor local desde la pestaña «Developer».',
+    detail:
+      'Igual que Ollama pero con interfaz gráfica. Levanta el servidor local desde la pestaña «Developer».',
     note: 'En LM Studio hay que activar «Enable CORS» en los ajustes del servidor; si no, el navegador bloquea la llamada.',
   },
   {
@@ -78,7 +79,8 @@ export const AI_PRESETS: AiPreset[] = [
     cost: 'limite',
     needsKey: true,
     keyUrl: 'https://aistudio.google.com/apikey',
-    detail: 'Capa gratuita generosa y sin tarjeta. La clave se saca en Google AI Studio en un minuto.',
+    detail:
+      'Capa gratuita generosa y sin tarjeta. La clave se saca en Google AI Studio en un minuto.',
   },
   {
     id: 'groq',
@@ -111,7 +113,8 @@ export const AI_PRESETS: AiPreset[] = [
     cost: 'si',
     needsKey: true,
     keyUrl: 'https://console.anthropic.com/settings/keys',
-    detail: 'El más preciso de todos, y el que menos se equivoca con un CV mal maquetado. Se paga por uso.',
+    detail:
+      'El más preciso de todos, y el que menos se equivoca con un CV mal maquetado. Se paga por uso.',
   },
   {
     id: 'custom',
@@ -122,7 +125,8 @@ export const AI_PRESETS: AiPreset[] = [
     cost: 'si',
     needsKey: false,
     keyUrl: '',
-    detail: 'Cualquier servicio que exponga /chat/completions: Mistral, Together, DeepSeek, tu propio servidor.',
+    detail:
+      'Cualquier servicio que exponga /chat/completions: Mistral, Together, DeepSeek, tu propio servidor.',
   },
 ];
 
@@ -183,19 +187,11 @@ export function loadAiSettings(): AiSettings {
 }
 
 export function saveAiSettings(settings: AiSettings) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  } catch {
-    // Modo privado o cuota llena: queda solo en memoria.
-  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
 }
 
 export function clearAiSettings() {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // Nada que hacer.
-  }
+  localStorage.removeItem(STORAGE_KEY);
 }
 
 /** Pregunta a un Ollama local qué modelos tiene descargados. */
@@ -209,7 +205,9 @@ export async function listOllamaModels(baseUrl: string): Promise<string[]> {
 
 /** Claude trae fetch propio del lado del servidor; el resto necesita el lector externo. */
 export function canReadLinks(settings: AiSettings): boolean {
-  return isConfigured(settings) && (settings.provider === 'anthropic' || settings.reader !== 'ninguno');
+  return (
+    isConfigured(settings) && (settings.provider === 'anthropic' || settings.reader !== 'ninguno')
+  );
 }
 
 /** De dónde saldría el texto de una página, para poder decírselo a la persona. */

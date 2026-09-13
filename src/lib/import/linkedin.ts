@@ -5,7 +5,14 @@
  * tus datos. Llega un ZIP con un CSV por sección. Es la vía más fiel que hay,
  * porque son los datos tal como los tiene LinkedIn, no un texto adivinado.
  */
-import type { Certification, Education, Experience, LanguageItem, Project, SkillGroup } from '../../types';
+import type {
+  Certification,
+  Education,
+  Experience,
+  LanguageItem,
+  Project,
+  SkillGroup,
+} from '../../types';
 import { uid } from '../utils';
 import { parseCsv } from './files';
 import { emptyParsed, toMonthValue } from './parseCv';
@@ -75,8 +82,9 @@ export function parseLinkedInCsvs(csvs: Record<string, string>): ParsedCv {
     if (url) result.personal.website = url.replace(/^https?:\/\//, '');
   }
 
-  const email = pick(csvs, 'emails').find((r) => field(r, 'Primary', 'Principal').toLowerCase() === 'yes')
-    ?? pick(csvs, 'emails')[0];
+  const email =
+    pick(csvs, 'emails').find((r) => field(r, 'Primary', 'Principal').toLowerCase() === 'yes') ??
+    pick(csvs, 'emails')[0];
   if (email) {
     const value = field(email, 'Email Address', 'Correo', 'Dirección de correo electrónico');
     if (value) result.personal.email = value;
@@ -127,7 +135,11 @@ export function parseLinkedInCsvs(csvs: Record<string, string>): ParsedCv {
     .filter(Boolean);
   if (skills.length) {
     found.push(`${skills.length} aptitudes`);
-    result.skills.push({ id: uid('sk'), name: 'Habilidades', items: [...new Set(skills)] } satisfies SkillGroup);
+    result.skills.push({
+      id: uid('sk'),
+      name: 'Habilidades',
+      items: [...new Set(skills)],
+    } satisfies SkillGroup);
   }
 
   for (const row of pick(csvs, 'languages')) {
@@ -151,7 +163,9 @@ export function parseLinkedInCsvs(csvs: Record<string, string>): ParsedCv {
       id: uid('prj'),
       name,
       url: field(row, 'Url', 'URL', 'Enlace').replace(/^https?:\/\//, ''),
-      description: field(row, 'Description', 'Descripción', 'Descripcion').replace(/\s*\n\s*/g, ' ').trim(),
+      description: field(row, 'Description', 'Descripción', 'Descripcion')
+        .replace(/\s*\n\s*/g, ' ')
+        .trim(),
       tech: [],
     } satisfies Project);
   }

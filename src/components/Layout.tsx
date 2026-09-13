@@ -1,89 +1,107 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { Suspense, useEffect, useRef } from 'react';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import {
+  ArrowUpRight,
+  House,
+  FileText,
+  Search,
+  Bookmark,
+  CircleHelp,
+  ShieldCheck,
+} from 'lucide-react';
+import { ErrorBoundary } from './ErrorBoundary';
 import { useApp } from '../state/context';
-import { profileCompleteness } from '../lib/analysis';
-import { Button } from './ui';
 
-const LINKS = [
-  { to: '/', icon: '◎', label: 'Inicio', end: true },
-  { to: '/importar', icon: '↥', label: 'Importar' },
-  { to: '/perfil', icon: '☰', label: 'Perfil profesional' },
-  { to: '/cv', icon: '▤', label: 'Constructor de CV' },
-  { to: '/cartas', icon: '✉', label: 'Cartas' },
-  { to: '/postulaciones', icon: '⊞', label: 'Postulaciones' },
-  { to: '/entrevistas', icon: '◗', label: 'Entrevistas' },
-  { to: '/ajustes', icon: '⚙', label: 'Ajustes' },
+const links = [
+  { to: '/', label: 'Inicio', mobile: 'Inicio', icon: House, end: true },
+  { to: '/cv', label: 'Mi currículum', mobile: 'Currículum', icon: FileText },
+  { to: '/buscar', label: 'Buscar trabajo', mobile: 'Buscar', icon: Search },
+  { to: '/postulaciones', label: 'Mis postulaciones', mobile: 'Mis trabajos', icon: Bookmark },
 ];
-
 export function Layout() {
-  const { state, apply, saved } = useApp();
-  const completeness = profileCompleteness(state.profile);
-  const activeApps = state.applications.filter((a) => a.status !== 'rechazada').length;
-
-  const counts: Record<string, number> = {
-    '/postulaciones': activeApps,
-    '/cartas': state.letters.length,
-    '/entrevistas': state.answers.length,
-  };
-
+  const { saved, saveError } = useApp();
+  const location = useLocation();
+  const main = useRef<HTMLElement>(null);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    main.current?.focus();
+  }, [location.pathname]);
+  const cvRoute = ['/perfil', '/empezar', '/importar'].includes(location.pathname);
   return (
-    <div className="shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">I</div>
-          <div>
-            <strong>Impulso</strong>
-            <small>Busca trabajo</small>
-          </div>
-        </div>
-
-        <nav className="nav">
-          <span className="nav-label">Menú</span>
-          {LINKS.map((l) => (
-            <NavLink key={l.to} to={l.to} end={l.end}>
-              <span className="nav-icon" aria-hidden="true">
-                {l.icon}
-              </span>
+    <div className="app-shell">
+      <a className="skip-link" href="#contenido">
+        Saltar al contenido
+      </a>
+      <header className="site-header">
+        <Link to="/" className="brand" aria-label="Impulso, inicio">
+          <span className="brand-symbol">
+            <ArrowUpRight size={24} strokeWidth={3} />
+          </span>
+          impulso<span className="brand-dot">.</span>
+        </Link>
+        <nav aria-label="Navegación principal" className="desktop-nav">
+          {links.map((l) => (
+            <NavLink
+              key={l.to}
+              to={l.to}
+              end={l.end}
+              className={({ isActive }) =>
+                isActive || (l.to === '/cv' && cvRoute) ? 'active' : ''
+              }
+            >
               {l.label}
-              {counts[l.to] ? <span className="nav-count">{counts[l.to]}</span> : null}
             </NavLink>
           ))}
         </nav>
-
-        <div className="sidebar-foot">
-          <div className="faint">Perfil completo al {completeness.score}%</div>
-          <div
-            style={{
-              height: 5,
-              borderRadius: 3,
-              background: 'var(--ring-bg)',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                width: `${completeness.score}%`,
-                height: '100%',
-                background: completeness.score >= 80 ? 'var(--good)' : 'var(--accent)',
-                transition: 'width .3s',
-              }}
-            />
+        <Link className="help-link" to="/ajustes">
+          <CircleHelp size={19} />
+          <span>Ayuda y mis datos</span>
+        </Link>
+      </header>
+      <main id="contenido" ref={main} tabIndex={-1} className="main">
+        {saveError && (
+          <div className="save-warning" role="alert">
+            <strong>No está guardado.</strong> {saveError}{' '}
+            <Link to="/ajustes">Proteger mis datos</Link>
           </div>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => apply((s) => ({ ...s, theme: s.theme === 'dark' ? 'light' : 'dark' }))}
+        )}
+        <ErrorBoundary key={location.pathname}>
+          <Suspense
+            fallback={
+              <p role="status" className="notice">
+                Abriendo tu siguiente paso…
+              </p>
+            }
           >
-            {state.theme === 'dark' ? '☀ Modo claro' : '☾ Modo oscuro'}
-          </Button>
-          <span className="faint">Todo se guarda en este navegador.</span>
-        </div>
-      </aside>
-
-      <main className="main">
-        <Outlet />
+            <Outlet />
+          </Suspense>
+        </ErrorBoundary>
       </main>
-
-      {saved && <div className="saved-pill">Guardado ✓</div>}
+      <footer className="site-footer">
+        <span>
+          <ShieldCheck size={17} />
+          Tus datos se guardan en este navegador.
+        </span>
+        <Link to="/ajustes">
+          Hacer una copia de seguridad <ArrowUpRight size={15} />
+        </Link>
+      </footer>
+      <nav className="mobile-nav" aria-label="Navegación móvil">
+        {links.map((l) => (
+          <NavLink
+            key={l.to}
+            to={l.to}
+            end={l.end}
+            className={({ isActive }) => (isActive || (l.to === '/cv' && cvRoute) ? 'active' : '')}
+          >
+            <l.icon size={21} />
+            <span>{l.mobile}</span>
+          </NavLink>
+        ))}
+      </nav>
+      <div className="saved-pill" role="status" aria-live="polite">
+        {saved && !saveError ? 'Cambios guardados en este navegador' : ''}
+      </div>
     </div>
   );
 }

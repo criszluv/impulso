@@ -1,5 +1,4 @@
 import type { Profile } from '../types';
-import { totalExperienceMonths } from './analysis';
 import { textHasTerm } from './text';
 
 /** Habilidades más nombradas, de todos los grupos y stacks. */
@@ -31,17 +30,6 @@ export function relevantSkills(profile: Profile, jobDescription: string, limit =
 }
 
 /** El titular sin la parte de especialidad, para usarlo dentro de una frase. */
-function roleNoun(profile: Profile): string {
-  const headline = profile.personal.headline || 'profesional';
-  return headline.split(/[·|]/)[0].trim() || headline;
-}
-
-function experienceLabel(profile: Profile): string {
-  const months = totalExperienceMonths(profile);
-  if (months < 12) return 'en formación';
-  const years = Math.floor(months / 12);
-  return `con ${years} ${years === 1 ? 'año' : 'años'} de experiencia`;
-}
 
 function bestAchievement(profile: Profile): string {
   const bullets = profile.experience.flatMap((e) => e.bullets).filter((b) => b.trim());
@@ -63,48 +51,33 @@ export interface SummaryVariant {
  * cargado en el perfil. Son borradores para editar, no texto final.
  */
 export function summaryVariants(profile: Profile, target = ''): SummaryVariant[] {
-  const p = profile.personal;
-  const role = p.headline || 'profesional';
-  const skills = topSkills(profile, 4);
-  const skillsText = skills.length
-    ? skills.slice(0, -1).join(', ') + (skills.length > 1 ? ` y ${skills[skills.length - 1]}` : skills[0])
-    : 'mis principales herramientas';
-  const exp = experienceLabel(profile);
-  const win = bestAchievement(profile);
-  const lastCompany = profile.experience[0]?.company ?? '';
-  const goal = target || 'un equipo donde pueda seguir creciendo y aportar desde el primer mes';
-
+  const skills = topSkills(profile, 5),
+    role = profile.personal.headline;
+  const goal = target || role;
+  const intro = goal ? 'Busco trabajo en ' + goal + '.' : '';
+  const ability = skills.length ? 'Puedo aportar en ' + skills.join(', ') + '.' : '';
+  const first = profile.experience.find((e) => e.role.trim());
+  const experience = first
+    ? 'Mi experiencia incluye ' + first.role + (first.company ? ' en ' + first.company : '') + '.'
+    : '';
   return [
     {
-      name: 'Directo',
-      description: 'Va al grano. Funciona para postulaciones masivas y filtros automáticos.',
-      text: [
-        `${role} ${exp}, especializado en ${skillsText}.`,
-        win ? `Entre mis resultados: ${win}.` : '',
-        `Busco ${goal}.`,
-      ]
-        .filter(Boolean)
-        .join(' '),
+      name: 'Breve',
+      description: 'Una presentación sencilla con tus datos.',
+      text: [intro, ability].filter(Boolean).join(' '),
     },
     {
-      name: 'Con contexto',
-      description: 'Suma dónde trabajaste. Útil si vienes de una empresa reconocible.',
-      text: [
-        `${role} ${exp}.`,
-        lastCompany ? `Actualmente en ${lastCompany}, donde ${win || 'lidero proyectos de punta a punta'}.` : '',
-        `Trabajo a diario con ${skillsText}.`,
-        `Me interesa ${goal}.`,
-      ]
-        .filter(Boolean)
-        .join(' '),
+      name: 'Con mi experiencia',
+      description: 'Incluye un trabajo que registraste.',
+      text: [experience, ability, intro].filter(Boolean).join(' '),
     },
     {
-      name: 'Orientado a impacto',
-      description: 'Abre con el resultado. El más fuerte si tienes una cifra buena.',
+      name: 'Con mis estudios',
+      description: 'Incluye los estudios que registraste.',
       text: [
-        win ? `${win.charAt(0).toUpperCase() + win.slice(1)}.` : `${role} que entrega resultados medibles.`,
-        `Soy ${role.toLowerCase()} ${exp}, con foco en ${skillsText}.`,
-        `Quiero ${goal}.`,
+        intro,
+        ...profile.education.slice(0, 1).map((e) => 'Estudios: ' + e.degree + '.'),
+        ability,
       ]
         .filter(Boolean)
         .join(' '),
@@ -128,8 +101,10 @@ export function buildBullet(parts: BulletParts): string {
   if (!verb && !what) return '';
 
   let sentence = [verb, what].filter(Boolean).join(' ');
-  if (how) sentence += ` ${how.startsWith('con') || how.startsWith('mediante') || how.startsWith('usando') ? how : `mediante ${how}`}`;
-  if (result) sentence += `, ${result.startsWith('logrando') || result.startsWith('reduciendo') || result.startsWith('aumentando') ? result : `logrando ${result}`}`;
+  if (how)
+    sentence += ` ${how.startsWith('con') || how.startsWith('mediante') || how.startsWith('usando') ? how : `mediante ${how}`}`;
+  if (result)
+    sentence += `, ${result.startsWith('logrando') || result.startsWith('reduciendo') || result.startsWith('aumentando') ? result : `logrando ${result}`}`;
   return `${sentence.charAt(0).toUpperCase()}${sentence.slice(1)}.`;
 }
 
@@ -145,87 +120,54 @@ export interface LetterInput {
 
 /** Borrador de carta de presentación en cuatro párrafos. */
 export function generateCoverLetter(input: LetterInput): string {
-  const { profile, company, role, recipient, source, motivation, keywords } = input;
-  const p = profile.personal;
-  const name = p.fullName || '[Tu nombre]';
-  const empresa = company || '[Empresa]';
-  const cargo = role || '[Cargo]';
-  const saludo = recipient ? `Estimado/a ${recipient}:` : 'Estimado equipo de selección:';
-  const exp = experienceLabel(profile);
-  const skills = (keywords.length ? keywords : topSkills(profile, 4)).slice(0, 4);
-  const skillsText = skills.length ? skills.join(', ') : 'las herramientas del rol';
-  const win = bestAchievement(profile);
-  const via = source ? ` a través de ${source}` : '';
-
-  const cuerpo = [
-    saludo,
-    '',
-    `Les escribo para postular al cargo de ${cargo} en ${empresa}, publicado${via}. Soy ${roleNoun(profile)} ${exp} y creo que el perfil que describen calza con lo que vengo haciendo.`,
-    '',
-    win
-      ? `En mi rol actual ${win}. Ese tipo de trabajo es el que me gustaría seguir haciendo en ${empresa}, especialmente en lo que respecta a ${skillsText}.`
-      : `Manejo a diario ${skillsText}, y me muevo bien en equipos donde hay que hacerse cargo del problema completo, no solo de la tarea asignada.`,
-    '',
-    motivation
-      ? motivation
-      : `Me interesa ${empresa} en particular porque [completa aquí con algo concreto de la empresa: un producto que usas, un valor que comparten, una nota que leíste]. Ese detalle es lo que separa una carta genérica de una que se lee entera.`,
-    '',
-    `Quedo atento/a a la posibilidad de conversar. Pueden contactarme al ${p.phone || '[teléfono]'} o a ${p.email || '[correo]'}.`,
-    '',
-    'Saludos cordiales,',
-    name,
-  ];
-
-  return cuerpo.join('\n');
+  const { profile, company, role, recipient, motivation } = input;
+  return [
+    recipient ? 'Hola, ' + recipient + ':' : 'Hola:',
+    'Me interesa ' +
+      (role ? 'el trabajo de ' + role : 'esta oportunidad') +
+      (company ? ' en ' + company : '') +
+      '.',
+    profile.personal.summary,
+    bestAchievement(profile) ? 'Una de mis experiencias: ' + bestAchievement(profile) + '.' : '',
+    motivation,
+    'Quedo disponible para conversar.',
+    profile.personal.fullName,
+    [profile.personal.phone, profile.personal.email].filter(Boolean).join(' · '),
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 }
 
 /** Titular de LinkedIn: cargo + especialidad + valor. */
 export function linkedinHeadlines(profile: Profile): string[] {
-  const role = profile.personal.headline || 'Profesional';
-  const base = role.split('·')[0].trim();
-  const skills = topSkills(profile, 3);
-  const win = bestAchievement(profile);
-  const metric = win.match(/\d+[%\d.,]*\s*\w*/)?.[0] ?? '';
-
+  const role = profile.personal.headline.trim(),
+    skills = topSkills(profile, 3);
   return [
-    `${base} · ${skills.slice(0, 2).join(' y ') || 'especialista'}`,
-    `${base} | Ayudo a equipos a ${skills[0] ? `sacar más de ${skills[0]}` : 'entregar mejores resultados'}`,
-    metric ? `${base} · ${metric} de impacto medible en mi último proyecto` : `${base} · Abierto a nuevas oportunidades`,
+    role || 'En búsqueda de trabajo',
+    [role, ...skills.slice(0, 2)].filter(Boolean).join(' · ') ||
+      'Disponible para nuevas oportunidades',
+    role ? 'Busco trabajo en ' + role : 'Quiero encontrar mi próximo trabajo',
   ];
 }
 
-/**
- * Borrador del «Acerca de» de LinkedIn. A diferencia del CV, aquí se escribe
- * en primera persona y se permite algo más de voz propia.
- */
 export function linkedinAbout(profile: Profile): string {
-  const p = profile.personal;
-  const skills = topSkills(profile, 5);
-  const wins = profile.experience
-    .flatMap((e) => e.bullets)
-    .filter((b) => b.trim() && /\d/.test(b))
-    .slice(0, 3);
-
-  const parts: string[] = [];
-  parts.push(p.summary.trim() || `Soy ${p.headline || 'profesional'} y esto es lo que hago.`);
-
-  if (wins.length) {
-    parts.push('');
-    parts.push('Algunas cosas que he hecho:');
-    parts.push(...wins.map((w) => `• ${w.replace(/^/, '').trim()}`));
-  }
-
-  if (skills.length) {
-    parts.push('');
-    parts.push(`Trabajo principalmente con: ${skills.join(' · ')}.`);
-  }
-
-  parts.push('');
-  parts.push(
-    `Si estás armando un equipo o quieres conversar sobre un proyecto, escríbeme${p.email ? ` a ${p.email}` : ''}.`,
-  );
-
-  return parts.join('\n');
+  const p = profile.personal,
+    skills = topSkills(profile, 5),
+    tasks = profile.experience
+      .flatMap((e) => e.bullets)
+      .filter((b) => b.trim())
+      .slice(0, 3);
+  return [
+    p.summary ||
+      (p.headline
+        ? 'Busco trabajo en ' + p.headline + '.'
+        : 'Estoy buscando una oportunidad de trabajo.'),
+    tasks.length ? 'Mi experiencia incluye:\n' + tasks.map((t) => '- ' + t).join('\n') : '',
+    skills.length ? 'Puedo aportar en: ' + skills.join(', ') + '.' : '',
+    [p.phone, p.email].filter(Boolean).join(' · '),
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 }
 
 export interface InterviewQuestion {
@@ -253,7 +195,7 @@ export const INTERVIEW_QUESTIONS: InterviewQuestion[] = [
   {
     question: 'Cuéntame de un problema difícil que resolviste',
     category: 'Conductual',
-    tip: 'STAR completo. La parte que más importa es la Acción: qué hiciste tú, no el equipo.',
+    tip: 'Cuenta qué pasaba, qué hiciste y cómo terminó. Usa un ejemplo real.',
   },
   {
     question: 'Háblame de un error que cometiste',

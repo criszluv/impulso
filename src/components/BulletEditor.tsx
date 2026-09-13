@@ -24,7 +24,9 @@ export function BulletEditor({
   const [openReview, setOpenReview] = useState<number | null>(null);
   const [wizard, setWizard] = useState(false);
   const [rewriting, setRewriting] = useState<number | null>(null);
-  const [suggestions, setSuggestions] = useState<{ index: number; data: BulletRewrite } | null>(null);
+  const [suggestions, setSuggestions] = useState<{ index: number; data: BulletRewrite } | null>(
+    null,
+  );
   const [aiError, setAiError] = useState('');
 
   const update = (index: number, value: string) => {
@@ -49,8 +51,18 @@ export function BulletEditor({
   };
 
   return (
-    <Field label="Logros" hint="Uno por línea. Verbo en pasado, qué hiciste y qué resultado dejó." wide>
+    <Field
+      label="Tareas y aportes"
+      hint="Describe lo que hacías con tus palabras. Las cifras y resultados son opcionales."
+      wide
+    >
       <div className="stack">
+        {aiReady && (
+          <p className="field-hint">
+            El botón de IA envía la tarea, el cargo y la empresa al servicio configurado. Las otras
+            ayudas funcionan aquí mismo.
+          </p>
+        )}
         {bullets.map((b, i) => {
           const issues = reviewBullet(b);
           const worst = issues.find((x) => x.level === 'warn' || x.level === 'error');
@@ -59,10 +71,11 @@ export function BulletEditor({
             <div key={i}>
               <div className="row" style={{ alignItems: 'flex-start', gap: 8, flexWrap: 'nowrap' }}>
                 <textarea
+                  aria-label={'Tarea ' + (i + 1)}
                   className="input textarea"
                   rows={2}
                   value={b}
-                  placeholder="Ej: Reduje el tiempo de respuesta del soporte de 48 a 6 horas rediseñando el flujo de tickets."
+                  placeholder="Por ejemplo: atendía clientes, ordenaba los productos y ayudaba en caja."
                   onChange={(e) => update(i, e.target.value)}
                   style={{ minHeight: 56 }}
                 />
@@ -73,7 +86,11 @@ export function BulletEditor({
                     title="Revisar redacción"
                     onClick={() => setOpenReview(open ? null : i)}
                   >
-                    {b.trim() ? (worst ? `⚠ ${issues.filter((x) => x.level !== 'ok').length}` : '✓') : '—'}
+                    {b.trim()
+                      ? worst
+                        ? `⚠ ${issues.filter((x) => x.level !== 'ok').length}`
+                        : '✓'
+                      : '—'}
                   </Button>
                   {aiReady && (
                     <Button
@@ -159,10 +176,10 @@ export function BulletEditor({
 
         <div className="row">
           <Button size="sm" onClick={() => onChange([...bullets, ''])}>
-            + Agregar logro
+            + Agregar tarea
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setWizard((v) => !v)}>
-            {wizard ? 'Cerrar asistente' : '✦ Asistente de redacción'}
+            {wizard ? 'Cerrar asistente' : '✦ Ayudarme a escribir una tarea'}
           </Button>
         </div>
 

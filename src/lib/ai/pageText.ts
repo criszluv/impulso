@@ -52,7 +52,10 @@ export function cleanPageMarkdown(markdown: string): string {
     out.push(line);
   }
 
-  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  return out
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 function trim(text: string): string {
@@ -107,7 +110,9 @@ async function viaClaude(url: string, settings: AiSettings): Promise<string> {
       messages: [{ role: 'user', content: `Léeme el contenido de esta página: ${url}` }],
       // La versión básica basta para transcribir y funciona en más modelos que
       // las que traen filtrado dinámico.
-      tools: [{ type: 'web_fetch_20250910', name: 'web_fetch', max_uses: 3, max_content_tokens: 30000 }],
+      tools: [
+        { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: 3, max_content_tokens: 30000 },
+      ],
     });
 
     const text = message.content

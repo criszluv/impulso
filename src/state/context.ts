@@ -11,12 +11,7 @@ import type {
 } from '../types';
 
 export type ProfileListKey =
-  | 'experience'
-  | 'education'
-  | 'skills'
-  | 'languages'
-  | 'projects'
-  | 'certifications';
+  'experience' | 'education' | 'skills' | 'languages' | 'projects' | 'certifications';
 
 export interface AppContextValue {
   state: AppState;
@@ -29,6 +24,11 @@ export interface AppContextValue {
   setAnswers: (items: StarAnswer[]) => void;
   replaceAll: (next: AppState) => void;
   saved: boolean;
+  saveError: string;
+  retrySave: () => void;
+  undoAvailable: boolean;
+  undo: () => void;
+  clearAll: () => void;
   /** Config del asistente con IA. Vive aparte del estado para que la clave no viaje en las copias de seguridad. */
   ai: AiSettings;
   setAi: (next: AiSettings) => void;
