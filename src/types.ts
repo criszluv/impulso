@@ -103,10 +103,14 @@ export interface Application {
   updatedAt: string;
 }
 
-export type TemplateId = 'moderno' | 'clasico' | 'compacto';
+export type TemplateId = 'ats' | 'clasico' | 'compacto' | 'moderno';
+
+/** Tipografías que los lectores automáticos de CV parsean sin problemas. */
+export type CvFont = 'calibri' | 'arial' | 'georgia' | 'times';
 
 export interface CvConfig {
   template: TemplateId;
+  font: CvFont;
   accent: string;
   fontScale: number;
   showPhoto: boolean;

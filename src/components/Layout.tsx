@@ -5,6 +5,7 @@ import { Button } from './ui';
 
 const LINKS = [
   { to: '/', icon: '◎', label: 'Inicio', end: true },
+  { to: '/importar', icon: '↥', label: 'Importar' },
   { to: '/perfil', icon: '☰', label: 'Perfil profesional' },
   { to: '/cv', icon: '▤', label: 'Constructor de CV' },
   { to: '/cartas', icon: '✉', label: 'Cartas' },

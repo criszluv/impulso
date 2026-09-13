@@ -2,32 +2,58 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../state/context';
 import { CvDocument } from '../cv/CvDocument';
-import { cvStats, matchJob, profileCompleteness } from '../lib/analysis';
-import type { TemplateId } from '../types';
+import { FONT_LABELS } from '../cv/fonts';
+import { cvStats, matchJob } from '../lib/analysis';
+import { ATS_ANTIPATTERNS, SINGLE_COLUMN, atsReview } from '../lib/ats';
+import type { CvFont, TemplateId } from '../types';
 import { Badge, Button, Card, Empty, ScoreRing, Select, TextArea, Toggle } from '../components/ui';
 
-const TEMPLATES: Array<{ id: TemplateId; name: string; detail: string }> = [
-  { id: 'moderno', name: 'Moderno', detail: 'Dos columnas. Cabe más en una página.' },
-  { id: 'clasico', name: 'Clásico', detail: 'Una columna, centrado. El más seguro para banca, salud o sector público.' },
-  { id: 'compacto', name: 'Compacto', detail: 'Una columna densa. Para cuando tienes mucha experiencia.' },
+const TEMPLATES: Array<{ id: TemplateId; name: string; detail: string; tag?: string }> = [
+  {
+    id: 'ats',
+    name: 'ATS',
+    tag: 'Recomendado',
+    detail:
+      'Una columna, encabezados estándar y negro sobre blanco. Es el formato que los filtros de reclutamiento leen sin equivocarse.',
+  },
+  {
+    id: 'clasico',
+    name: 'Clásico',
+    detail: 'Una columna con la cabecera centrada y un toque de color. Seguro para banca, salud o sector público.',
+  },
+  {
+    id: 'compacto',
+    name: 'Compacto',
+    detail: 'Una columna más densa. Para cuando tienes mucha experiencia y no quieres pasar de dos páginas.',
+  },
+  {
+    id: 'moderno',
+    name: 'Moderno',
+    tag: 'Dos columnas',
+    detail:
+      'Se ve bien y cabe más, pero los lectores automáticos mezclan las columnas. Úsalo solo si se lo envías directo a una persona.',
+  },
 ];
 
 const ACCENTS = ['#4d8bff', '#0f766e', '#7c3aed', '#b45309', '#be123c', '#1f2937'];
+const FONTS: CvFont[] = ['calibri', 'arial', 'georgia', 'times'];
 
 export function CvBuilder() {
   const { state, patchCv } = useApp();
   const { profile, cv, applications } = state;
   const [pastedJob, setPastedJob] = useState('');
   const [zoom, setZoom] = useState(0.75);
+  const [showAvoid, setShowAvoid] = useState(false);
 
   const stats = cvStats(profile);
-  const completeness = profileCompleteness(profile);
+  const ats = atsReview(profile, cv);
 
   const targetApp = applications.find((a) => a.id === cv.targetJobId) ?? null;
   const jobText = pastedJob.trim() || targetApp?.jobDescription || '';
   const match = useMemo(() => matchJob(jobText, profile), [jobText, profile]);
 
   const hasProfile = Boolean(profile.personal.fullName || profile.experience.length);
+  const failed = ats.checks.filter((c) => !c.ok);
 
   if (!hasProfile) {
     return (
@@ -37,12 +63,17 @@ export function CvBuilder() {
         </div>
         <Card>
           <Empty
-            title="Primero necesitas un perfil"
-            text="El CV se arma solo con los datos de tu perfil. Carga al menos tu nombre y una experiencia."
+            title="Primero necesitas tus datos cargados"
+            text="El CV se arma solo con lo que haya en tu perfil. Puedes subir el CV que ya tienes y corregirlo, o escribirlo desde cero."
             action={
-              <Link to="/perfil">
-                <Button variant="primary">Ir al perfil</Button>
-              </Link>
+              <div className="row" style={{ justifyContent: 'center' }}>
+                <Link to="/importar">
+                  <Button variant="primary">Subir mi CV o LinkedIn</Button>
+                </Link>
+                <Link to="/perfil">
+                  <Button>Escribirlo yo</Button>
+                </Link>
+              </div>
             }
           />
         </Card>
@@ -56,8 +87,9 @@ export function CvBuilder() {
         <div>
           <h1>Constructor de CV</h1>
           <p>
-            Ajusta el formato, revisa que calce con la oferta y exporta a PDF. Usa «Guardar como
-            PDF» en el diálogo de impresión: sale igual a lo que ves acá.
+            Ajusta el formato, revisa que pase los filtros automáticos y expórtalo. Al imprimir,
+            elige «Guardar como PDF»: sale igual a lo que ves acá y con el texto seleccionable, que
+            es lo que necesitan los sistemas de reclutamiento.
           </p>
         </div>
         <div className="head-actions">
@@ -69,6 +101,55 @@ export function CvBuilder() {
 
       <div className="split split-cv">
         <div className="no-print">
+          <Card
+            title="Compatibilidad con filtros automáticos"
+            subtitle="La mayoría de las postulaciones pasa primero por un sistema que lee el CV antes que una persona."
+            actions={<Badge tone={ats.score >= 80 ? 'good' : ats.score >= 60 ? 'warn' : 'bad'}>{ats.score}%</Badge>}
+          >
+            <div className="row" style={{ gap: 18, alignItems: 'flex-start' }}>
+              <ScoreRing value={ats.score} label="compatible" size={88} />
+              <p className="muted" style={{ flex: 1, minWidth: 170, fontSize: 13.5 }}>
+                {ats.score >= 85
+                  ? 'Tu CV cumple con lo que esperan estos sistemas.'
+                  : failed.length === 1
+                    ? 'Queda un punto por resolver.'
+                    : `Quedan ${failed.length} puntos por resolver.`}
+              </p>
+            </div>
+
+            <ul className="checklist" style={{ marginTop: 14 }}>
+              {ats.checks.map((c) => (
+                <li key={c.id} className={c.ok ? 'done' : ''}>
+                  <span className="mark">{c.ok ? '✓' : '○'}</span>
+                  <div>
+                    <span className="label">{c.label}</span>
+                    {!c.ok && <small>{c.detail}</small>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <div className="row" style={{ marginTop: 14 }}>
+              <Button size="sm" variant="ghost" onClick={() => setShowAvoid((v) => !v)}>
+                {showAvoid ? 'Ocultar' : 'Qué evitar (y por qué)'}
+              </Button>
+            </div>
+
+            {showAvoid && (
+              <div className="stack" style={{ marginTop: 12, gap: 8 }}>
+                {ATS_ANTIPATTERNS.map((a) => (
+                  <div className="issue issue-warn" key={a.title}>
+                    <span className="issue-icon">!</span>
+                    <div>
+                      <strong>{a.title}</strong>
+                      <p>{a.detail}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
           <Card title="Formato">
             <div className="stack">
               <div className="grid" style={{ gridTemplateColumns: '1fr' }}>
@@ -87,36 +168,73 @@ export function CvBuilder() {
                       font: 'inherit',
                     }}
                   >
-                    <b style={{ fontSize: 14 }}>{t.name}</b>
+                    <span className="row" style={{ gap: 8 }}>
+                      <b style={{ fontSize: 14 }}>{t.name}</b>
+                      {t.tag && (
+                        <Badge tone={t.id === 'ats' ? 'good' : 'warn'}>{t.tag}</Badge>
+                      )}
+                    </span>
                     <span>{t.detail}</span>
                   </button>
                 ))}
               </div>
 
-              <div className="field">
-                <span className="field-label">Color de acento</span>
-                <div className="row">
-                  {ACCENTS.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      aria-label={`Color ${c}`}
-                      onClick={() => patchCv({ accent: c })}
-                      style={{
-                        width: 26,
-                        height: 26,
-                        borderRadius: '50%',
-                        background: c,
-                        border: cv.accent === c ? '2px solid var(--text)' : '1px solid var(--line)',
-                        cursor: 'pointer',
-                      }}
-                    />
-                  ))}
+              {!SINGLE_COLUMN.includes(cv.template) && (
+                <div className="issue issue-warn">
+                  <span className="issue-icon">!</span>
+                  <div>
+                    <strong>Estás usando dos columnas</strong>
+                    <p>
+                      Para postular por un portal, cambia a «ATS». Guarda el formato de dos columnas
+                      para cuando envíes el CV por correo a una persona concreta.
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              <Select
+                label="Tipografía"
+                hint="Las cuatro son tipografías que los lectores automáticos parsean sin romper palabras."
+                value={cv.font}
+                onChange={(e) => patchCv({ font: e.target.value as CvFont })}
+              >
+                {FONTS.map((f) => (
+                  <option key={f} value={f}>
+                    {FONT_LABELS[f]}
+                  </option>
+                ))}
+              </Select>
+
+              {cv.template !== 'ats' && (
+                <div className="field">
+                  <span className="field-label">Color de acento</span>
+                  <div className="row">
+                    {ACCENTS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        aria-label={`Color ${c}`}
+                        onClick={() => patchCv({ accent: c })}
+                        style={{
+                          width: 26,
+                          height: 26,
+                          borderRadius: '50%',
+                          background: c,
+                          border: cv.accent === c ? '2px solid var(--text)' : '1px solid var(--line)',
+                          cursor: 'pointer',
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <span className="field-hint">La plantilla ATS va siempre en negro, a propósito.</span>
+                </div>
+              )}
 
               <div className="field">
-                <span className="field-label">Tamaño de letra ({Math.round(cv.fontScale * 100)}%)</span>
+                <span className="field-label">
+                  Tamaño de letra ({Math.round(cv.fontScale * 100)}%) · {stats.estimatedPages}{' '}
+                  {stats.estimatedPages === 1 ? 'página' : 'páginas'}
+                </span>
                 <input
                   type="range"
                   min={0.85}
@@ -125,7 +243,7 @@ export function CvBuilder() {
                   value={cv.fontScale}
                   onChange={(e) => patchCv({ fontScale: Number(e.target.value) })}
                 />
-                <span className="field-hint">Bájalo si el CV se pasa de una página por poco.</span>
+                <span className="field-hint">Bájalo si el CV se pasa de página por poco. Bajo 10pt hay parsers que saltan el texto.</span>
               </div>
 
               <div className="stack" style={{ gap: 8 }}>
@@ -155,73 +273,9 @@ export function CvBuilder() {
             </div>
           </Card>
 
-          <Card title="Revisión rápida" subtitle="Señales que miran los reclutadores en los primeros 10 segundos.">
-            <div className="grid">
-              <div className="stat">
-                <b>{stats.estimatedPages}</b>
-                <span>{stats.estimatedPages === 1 ? 'página estimada' : 'páginas estimadas'}</span>
-              </div>
-              <div className="stat">
-                <b>
-                  {stats.bulletsWithMetrics}/{stats.bullets}
-                </b>
-                <span>logros con cifras</span>
-              </div>
-              <div className="stat">
-                <b>{completeness.score}%</b>
-                <span>perfil completo</span>
-              </div>
-            </div>
-
-            <div className="stack" style={{ marginTop: 14 }}>
-              {stats.estimatedPages > 2 && (
-                <div className="issue issue-warn">
-                  <span className="issue-icon">!</span>
-                  <div>
-                    <strong>El CV se está yendo largo</strong>
-                    <p>Con menos de 10 años de experiencia, una página basta; dos es el techo razonable.</p>
-                  </div>
-                </div>
-              )}
-              {stats.bullets > 0 && stats.bulletsWithMetrics / stats.bullets < 0.5 && (
-                <div className="issue issue-warn">
-                  <span className="issue-icon">!</span>
-                  <div>
-                    <strong>Menos de la mitad de tus logros tiene cifras</strong>
-                    <p>Revisa cada uno en el perfil: el botón de revisión te dice cuál falta.</p>
-                  </div>
-                </div>
-              )}
-              {stats.repeatedVerbs.length > 0 && (
-                <div className="issue issue-tip">
-                  <span className="issue-icon">i</span>
-                  <div>
-                    <strong>Verbos repetidos</strong>
-                    <p>
-                      {stats.repeatedVerbs
-                        .slice(0, 3)
-                        .map((v) => `«${v.verb}» ×${v.count}`)
-                        .join(', ')}
-                      . Variar el verbo hace que cada logro se lea distinto.
-                    </p>
-                  </div>
-                </div>
-              )}
-              {stats.estimatedPages <= 2 && stats.repeatedVerbs.length === 0 && stats.bulletsWithMetrics >= stats.bullets / 2 && (
-                <div className="issue issue-ok">
-                  <span className="issue-icon">✓</span>
-                  <div>
-                    <strong>Sin observaciones</strong>
-                    <p>Largo razonable, logros medidos y verbos variados.</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </Card>
-
           <Card
             title="¿Calza con la oferta?"
-            subtitle="Pega la descripción del aviso y compara: los filtros automáticos buscan literalmente estas palabras."
+            subtitle="Pega la descripción del aviso y compara: los filtros buscan literalmente estas palabras."
           >
             {applications.length > 0 && (
               <Select
@@ -271,8 +325,8 @@ export function CvBuilder() {
                       ))}
                     </div>
                     <p className="field-hint" style={{ marginTop: 8 }}>
-                      Agrégalas solo si son verdad. Inflar el CV con palabras que no puedes defender
-                      en la entrevista es la forma más rápida de quedar fuera.
+                      Agrégalas solo si son verdad. Los sistemas actuales cruzan lo que declaras
+                      contra tu historial, así que una habilidad sin respaldo resta en vez de sumar.
                     </p>
                   </div>
                 )}

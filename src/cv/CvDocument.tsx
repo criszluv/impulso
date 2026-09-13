@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { CvConfig, Profile } from '../types';
+import { FONT_STACKS } from './fonts';
 import { formatMonth, formatRange } from '../lib/utils';
 
 interface Props {
@@ -37,9 +38,7 @@ function ExperienceSection({ profile }: { profile: Profile }) {
             <strong>{e.role || 'Cargo'}</strong>
             <span className="when">{formatRange(e.startDate, e.endDate, e.current)}</span>
           </div>
-          <div className="where">
-            {[e.company, e.location].filter(Boolean).join(' · ')}
-          </div>
+          <div className="where">{[e.company, e.location].filter(Boolean).join(' · ')}</div>
           {e.bullets.filter(Boolean).length > 0 && (
             <ul>
               {e.bullets.filter(Boolean).map((b, i) => (
@@ -58,7 +57,7 @@ function EducationSection({ profile }: { profile: Profile }) {
   if (!profile.education.length) return null;
   return (
     <section className="cv-section">
-      <h2>Formación</h2>
+      <h2>Educación</h2>
       {profile.education.map((e) => (
         <article className="cv-entry" key={e.id}>
           <div className="cv-entry-head">
@@ -87,7 +86,7 @@ function SkillsSection({ profile, inline }: { profile: Profile; inline?: boolean
           </div>
         ) : (
           <div className="cv-entry" key={g.id}>
-            <b style={{ fontSize: 'calc(9.5pt * var(--cv-scale, 1))' }}>{g.name}</b>
+            <b className="cv-subhead">{g.name}</b>
             <div>{g.items.join(', ')}</div>
           </div>
         ),
@@ -161,12 +160,13 @@ function Summary({ profile }: { profile: Profile }) {
 export function CvDocument({ profile, config }: Props) {
   const p = profile.personal;
   const style = {
-    '--cv-accent': config.accent,
+    '--cv-accent': config.template === 'ats' ? '#000000' : config.accent,
     '--cv-scale': config.fontScale,
+    '--cv-font': FONT_STACKS[config.font] ?? FONT_STACKS.calibri,
   } as CSSProperties;
 
   const head = (
-    <header className="cv-head" style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
+    <header className="cv-head">
       {config.showPhoto && p.photo && <img className="cv-photo" src={p.photo} alt="" />}
       <div style={{ minWidth: 0, flex: 1 }}>
         <h1 className="cv-name">{p.fullName || 'Tu nombre'}</h1>
@@ -175,6 +175,25 @@ export function CvDocument({ profile, config }: Props) {
       </div>
     </header>
   );
+
+  /**
+   * Orden recomendado para filtros automáticos: contacto, resumen,
+   * habilidades, experiencia, educación, certificaciones.
+   */
+  if (config.template === 'ats') {
+    return (
+      <article className="cv-page cv-ats" style={style}>
+        {head}
+        {config.showSummary && <Summary profile={profile} />}
+        <SkillsSection profile={profile} inline />
+        <ExperienceSection profile={profile} />
+        <EducationSection profile={profile} />
+        {config.showCertifications && <CertificationsSection profile={profile} />}
+        {config.showLanguages && <LanguagesSection profile={profile} />}
+        {config.showProjects && <ProjectsSection profile={profile} />}
+      </article>
+    );
+  }
 
   if (config.template === 'moderno') {
     return (

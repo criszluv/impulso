@@ -3,6 +3,7 @@ import { AppProvider } from './state/AppContext';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { ProfilePage } from './pages/Profile';
+import { ImportPage } from './pages/Import';
 import { CvBuilder } from './pages/CvBuilder';
 import { Letters } from './pages/Letters';
 import { Applications } from './pages/Applications';
@@ -17,6 +18,7 @@ export default function App() {
           <Route element={<Layout />}>
             <Route index element={<Dashboard />} />
             <Route path="perfil" element={<ProfilePage />} />
+            <Route path="importar" element={<ImportPage />} />
             <Route path="cv" element={<CvBuilder />} />
             <Route path="cartas" element={<Letters />} />
             <Route path="postulaciones" element={<Applications />} />

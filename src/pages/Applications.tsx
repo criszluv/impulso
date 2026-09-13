@@ -4,8 +4,8 @@ import { removeById, upsert } from '../lib/list';
 import type { Application, ApplicationStatus } from '../types';
 import { daysSince, formatDate, uid } from '../lib/utils';
 import { matchJob } from '../lib/analysis';
+import { parseJobPosting, sourceFromUrl } from '../lib/import/parseJob';
 import {
-  Badge,
   Button,
   Card,
   ConfirmButton,
@@ -16,15 +16,15 @@ import {
   TextInput,
 } from '../components/ui';
 
-const COLUMNS: Array<{ id: ApplicationStatus; label: string }> = [
-  { id: 'guardada', label: 'Guardada' },
-  { id: 'postulada', label: 'Postulada' },
-  { id: 'entrevista', label: 'Entrevista' },
-  { id: 'oferta', label: 'Oferta' },
-  { id: 'rechazada', label: 'Cerrada' },
+const COLUMNS: Array<{ id: ApplicationStatus; label: string; hint: string }> = [
+  { id: 'guardada', label: 'Guardada', hint: 'Te interesa, pero todavía no la envías.' },
+  { id: 'postulada', label: 'Postulada', hint: 'Ya enviaste el CV. Esperando respuesta.' },
+  { id: 'entrevista', label: 'Entrevista', hint: 'Te contactaron y hay proceso en curso.' },
+  { id: 'oferta', label: 'Oferta', hint: 'Llegó una propuesta concreta.' },
+  { id: 'rechazada', label: 'Cerrada', hint: 'Te dijeron que no, o decidiste bajarte.' },
 ];
 
-function newApplication(): Application {
+function newApplication(patch: Partial<Application> = {}): Application {
   const now = new Date().toISOString();
   return {
     id: uid('app'),
@@ -43,6 +43,7 @@ function newApplication(): Application {
     jobDescription: '',
     createdAt: now,
     updatedAt: now,
+    ...patch,
   };
 }
 
@@ -52,6 +53,10 @@ export function Applications() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<ApplicationStatus | null>(null);
   const [query, setQuery] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [jobUrl, setJobUrl] = useState('');
+  const [jobText, setJobText] = useState('');
+  const [readNotes, setReadNotes] = useState<string[]>([]);
 
   const selected = applications.find((a) => a.id === selectedId) ?? null;
 
@@ -69,12 +74,6 @@ export function Applications() {
     setApplications(upsert(applications, { ...app, ...p, updatedAt: new Date().toISOString() }));
   };
 
-  const create = () => {
-    const a = newApplication();
-    setApplications([a, ...applications]);
-    setSelectedId(a.id);
-  };
-
   const moveTo = (id: string, status: ApplicationStatus) => {
     const extra: Partial<Application> = { status };
     const app = applications.find((a) => a.id === id);
@@ -82,6 +81,32 @@ export function Applications() {
       extra.appliedAt = new Date().toISOString().slice(0, 10);
     }
     patch(id, extra);
+  };
+
+  const createBlank = () => {
+    const a = newApplication();
+    setApplications([a, ...applications]);
+    setSelectedId(a.id);
+    setAdding(false);
+  };
+
+  const createFromPosting = () => {
+    const parsedJob = parseJobPosting(jobText, jobUrl);
+    const a = newApplication({
+      role: parsedJob.role,
+      company: parsedJob.company,
+      location: parsedJob.location,
+      salary: parsedJob.salary,
+      source: parsedJob.source || sourceFromUrl(jobUrl),
+      url: jobUrl.trim(),
+      jobDescription: jobText.trim(),
+    });
+    setApplications([a, ...applications]);
+    setSelectedId(a.id);
+    setReadNotes(parsedJob.notes);
+    setAdding(false);
+    setJobUrl('');
+    setJobText('');
   };
 
   const match = selected?.jobDescription ? matchJob(selected.jobDescription, profile) : null;
@@ -92,86 +117,167 @@ export function Applications() {
         <div>
           <h1>Postulaciones</h1>
           <p>
-            Arrastra cada tarjeta según avance el proceso. Lo importante no es la cantidad, sino que
-            ninguna se quede sin próximo paso.
+            Es el registro de cada trabajo al que postulaste: en qué estado va, qué sigue y cuándo.
+            Sirve para dos cosas concretas: que ninguna oportunidad se enfríe por olvido, y ver en
+            qué parte del proceso se está cayendo tu búsqueda.
           </p>
         </div>
         <div className="head-actions">
-          <input
-            className="input"
-            style={{ width: 200 }}
-            placeholder="Buscar…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <Button variant="primary" onClick={create}>
-            + Nueva postulación
+          {applications.length > 0 && (
+            <input
+              className="input"
+              style={{ width: 180 }}
+              placeholder="Buscar…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          )}
+          <Button variant="primary" onClick={() => setAdding((v) => !v)}>
+            {adding ? 'Cerrar' : '+ Agregar desde un aviso'}
           </Button>
         </div>
       </div>
+
+      {adding && (
+        <Card
+          title="Pega el aviso"
+          subtitle="Se llenan solos el cargo, la empresa, la ubicación y el sueldo, y el texto queda guardado para comparar con tu CV."
+          actions={
+            <Button size="sm" variant="ghost" onClick={createBlank}>
+              Prefiero llenarlo a mano
+            </Button>
+          }
+        >
+          <div className="grid">
+            <TextInput
+              label="Enlace del aviso"
+              wide
+              value={jobUrl}
+              onChange={(e) => setJobUrl(e.target.value)}
+              placeholder="https://www.linkedin.com/jobs/view/..."
+              hint="Se guarda para que lo abras con un clic más adelante."
+            />
+            <TextArea
+              label="Texto del aviso"
+              rows={9}
+              value={jobText}
+              onChange={(e) => setJobText(e.target.value)}
+              placeholder="Abre el aviso, selecciona todo el texto de la publicación y pégalo aquí…"
+            />
+          </div>
+
+          <div className="issue issue-tip" style={{ marginTop: 12 }}>
+            <span className="issue-icon">i</span>
+            <div>
+              <strong>¿Por qué hay que pegar el texto y no basta el enlace?</strong>
+              <p>
+                Impulso corre entero en tu navegador y los portales de empleo bloquean que otra
+                página lea sus avisos. Traerlos pasando por un servidor intermedio significaría
+                mandarle a un tercero a qué postulas, y eso no compensa. Copiar y pegar toma cinco
+                segundos y el texto completo es justamente lo que necesita el comparador con tu CV.
+              </p>
+            </div>
+          </div>
+
+          <div className="row" style={{ marginTop: 14 }}>
+            <Button variant="primary" disabled={!jobText.trim() && !jobUrl.trim()} onClick={createFromPosting}>
+              Leer y crear postulación
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {readNotes.length > 0 && (
+        <div className="stack" style={{ gap: 8, marginBottom: 16 }}>
+          {readNotes.map((n) => (
+            <div className="issue issue-warn" key={n}>
+              <span className="issue-icon">!</span>
+              <div>
+                <strong>{n}</strong>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {applications.length === 0 ? (
         <Card>
           <Empty
             title="Sin postulaciones registradas"
-            text="Anota cada una, incluso las que todavía no envías. Ver el embudo completo ayuda a saber si el problema está en el CV o en la cantidad."
+            text="Anota cada una, incluso las que todavía no envías. Ver el embudo completo es lo que te dice si el problema está en el CV o en la cantidad de envíos."
             action={
-              <Button variant="primary" onClick={create}>
-                Agregar la primera
-              </Button>
+              <div className="row" style={{ justifyContent: 'center' }}>
+                <Button variant="primary" onClick={() => setAdding(true)}>
+                  Agregar desde un aviso
+                </Button>
+                <Button onClick={createBlank}>Crear una vacía</Button>
+              </div>
             }
           />
         </Card>
       ) : (
-        <div className="board">
-          {COLUMNS.map((col) => {
-            const items = filtered.filter((a) => a.status === col.id);
-            return (
-              <div
-                key={col.id}
-                className={`column ${dragOver === col.id ? 'drop' : ''}`}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragOver(col.id);
-                }}
-                onDragLeave={() => setDragOver((c) => (c === col.id ? null : c))}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const id = e.dataTransfer.getData('text/plain');
-                  if (id) moveTo(id, col.id);
-                  setDragOver(null);
-                }}
-              >
-                <div className="column-head">
-                  <span>{col.label}</span>
-                  <span>{items.length}</span>
-                </div>
-                {items.map((a) => {
-                  const d = a.appliedAt ? daysSince(a.appliedAt) : null;
-                  return (
-                    <div
-                      key={a.id}
-                      className="job-card"
-                      draggable
-                      onDragStart={(e) => e.dataTransfer.setData('text/plain', a.id)}
-                      onClick={() => setSelectedId(a.id === selectedId ? null : a.id)}
-                      style={{ borderColor: a.id === selectedId ? 'var(--accent)' : undefined }}
-                    >
-                      <strong>{a.role || 'Cargo sin nombre'}</strong>
-                      <div className="co">{a.company || 'Empresa'}</div>
-                      <div className="meta">
-                        {a.location && <span>{a.location}</span>}
-                        {d !== null && <span>hace {d} d</span>}
-                        {a.nextStepDate && <span>→ {formatDate(a.nextStepDate)}</span>}
-                      </div>
+        <Card
+          title="Tu tablero"
+          subtitle="Arrastra cada tarjeta cuando el proceso avance, o cámbiale el estado desde la ficha."
+          padded={false}
+        >
+          <div className="card-body">
+            <div className="board">
+              {COLUMNS.map((col) => {
+                const items = filtered.filter((a) => a.status === col.id);
+                return (
+                  <div
+                    key={col.id}
+                    className={`column ${dragOver === col.id ? 'drop' : ''}`}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setDragOver(col.id);
+                    }}
+                    onDragLeave={() => setDragOver((c) => (c === col.id ? null : c))}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const id = e.dataTransfer.getData('text/plain');
+                      if (id) moveTo(id, col.id);
+                      setDragOver(null);
+                    }}
+                  >
+                    <div className="column-head">
+                      <span>{col.label}</span>
+                      <span>{items.length}</span>
                     </div>
-                  );
-                })}
-                {items.length === 0 && <p className="faint" style={{ padding: '4px 4px 8px' }}>Vacío</p>}
-              </div>
-            );
-          })}
-        </div>
+                    <p className="column-hint">{col.hint}</p>
+                    {items.map((a) => {
+                      const d = a.appliedAt ? daysSince(a.appliedAt) : null;
+                      return (
+                        <div
+                          key={a.id}
+                          className="job-card"
+                          draggable
+                          onDragStart={(e) => e.dataTransfer.setData('text/plain', a.id)}
+                          onClick={() => setSelectedId(a.id === selectedId ? null : a.id)}
+                          style={{ borderColor: a.id === selectedId ? 'var(--accent)' : undefined }}
+                        >
+                          <strong>{a.role || 'Cargo sin nombre'}</strong>
+                          <div className="co">{a.company || 'Empresa'}</div>
+                          <div className="meta">
+                            {a.location && <span>{a.location}</span>}
+                            {d !== null && <span>hace {d} d</span>}
+                            {a.nextStepDate && <span>→ {formatDate(a.nextStepDate)}</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {items.length === 0 && (
+                      <p className="faint" style={{ padding: '4px 4px 8px' }}>
+                        Vacío
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </Card>
       )}
 
       {selected && (
@@ -180,6 +286,13 @@ export function Applications() {
           subtitle={`Creada el ${formatDate(selected.createdAt)}`}
           actions={
             <>
+              {selected.url && (
+                <a href={selected.url} target="_blank" rel="noreferrer">
+                  <Button size="sm" variant="ghost">
+                    Abrir aviso ↗
+                  </Button>
+                </a>
+              )}
               <Button size="sm" variant="ghost" onClick={() => setSelectedId(null)}>
                 Cerrar
               </Button>
@@ -238,13 +351,14 @@ export function Applications() {
             <TextInput
               label="Enlace al aviso"
               value={selected.url}
-              onChange={(e) => patch(selected.id, { url: e.target.value })}
+              onChange={(e) => patch(selected.id, { url: e.target.value, source: selected.source || sourceFromUrl(e.target.value) })}
             />
             <TextInput
               label="Próximo paso"
               value={selected.nextStep}
               onChange={(e) => patch(selected.id, { nextStep: e.target.value })}
               placeholder="Enviar correo de seguimiento"
+              hint="Lo más importante de la ficha: sin próximo paso, la postulación se enfría sola."
             />
             <TextInput
               label="¿Cuándo?"
@@ -270,7 +384,7 @@ export function Applications() {
               rows={6}
               value={selected.jobDescription}
               onChange={(e) => patch(selected.id, { jobDescription: e.target.value })}
-              hint="Pega el aviso completo: se usa para comparar con tu CV y para armar la carta."
+              hint="El texto del aviso. Se usa para comparar con tu CV y para armar la carta de presentación."
             />
           </div>
 
@@ -310,16 +424,6 @@ export function Applications() {
               </div>
             </div>
           )}
-
-          <div className="row" style={{ marginTop: 14 }}>
-            <Badge>{COLUMNS.find((c) => c.id === selected.status)?.label}</Badge>
-            {selected.salary && <Badge tone="accent">{selected.salary}</Badge>}
-            {selected.url && (
-              <a href={selected.url} target="_blank" rel="noreferrer" className="faint">
-                Abrir aviso ↗
-              </a>
-            )}
-          </div>
         </Card>
       )}
     </>

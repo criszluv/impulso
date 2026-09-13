@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { useApp } from '../state/context';
 import { moveItem, removeById } from '../lib/list';
 import type { Certification, Education, Experience, LanguageItem, LanguageLevel, Project, SkillGroup } from '../types';
@@ -94,7 +95,30 @@ export function ProfilePage() {
             que escribas acá. Vale la pena hacerlo bien una vez.
           </p>
         </div>
+        <div className="head-actions">
+          <Link to="/importar">
+            <Button>↥ Importar desde mi CV o LinkedIn</Button>
+          </Link>
+        </div>
       </div>
+
+      {!p.fullName && !profile.experience.length && (
+        <div className="next-step">
+          <span className="num" aria-hidden="true">
+            ↥
+          </span>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <h3>¿Tienes un CV o un perfil de LinkedIn?</h3>
+            <p>
+              Cárgalo y llega todo repartido en las secciones de abajo, listo para corregir. Es
+              bastante más rápido que llenar los campos uno por uno.
+            </p>
+          </div>
+          <Link to="/importar">
+            <Button variant="primary">Importar</Button>
+          </Link>
+        </div>
+      )}
 
       <Card title="Datos personales" subtitle="Lo que va en la cabecera del CV.">
         <div className="grid">

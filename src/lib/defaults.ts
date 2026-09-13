@@ -28,7 +28,8 @@ export const initialState: AppState = {
   profile: emptyProfile,
   applications: [],
   cv: {
-    template: 'moderno',
+    template: 'ats',
+    font: 'calibri',
     accent: '#3d7dff',
     fontScale: 1,
     showPhoto: false,
