@@ -24,16 +24,17 @@ const SOURCES: Array<{ id: Source; title: string; detail: string; icon: string }
     icon: '▤',
   },
   {
-    id: 'linkedin',
-    title: 'Mi LinkedIn',
-    detail: 'Con la copia de datos que entrega LinkedIn, el PDF de tu perfil, o pegando el texto.',
-    icon: 'in',
+    id: 'texto',
+    title: 'Pegar texto de cualquier parte',
+    detail:
+      'Tu perfil de LinkedIn, tu portafolio, un Google Docs, una página de empresa. Seleccionas, copias y pegas.',
+    icon: '¶',
   },
   {
-    id: 'texto',
-    title: 'Pegar texto',
-    detail: 'Copias tu CV desde donde sea y lo pegas. Es lo que funciona con cualquier formato.',
-    icon: '¶',
+    id: 'linkedin',
+    title: 'Copia de datos de LinkedIn',
+    detail: 'El ZIP oficial que entrega LinkedIn. Es la vía más fiel, porque no hay que interpretar nada.',
+    icon: 'in',
   },
   {
     id: 'copia',
@@ -555,7 +556,7 @@ export function ImportPage() {
       {source === 'linkedin' && (
         <>
           <Card
-            title="Opción A: la copia de datos de LinkedIn"
+            title="La copia de datos de LinkedIn"
             subtitle="La más fiel, porque son tus datos tal como los tiene LinkedIn, sin interpretar nada."
           >
             <ol className="steps">
@@ -601,50 +602,40 @@ export function ImportPage() {
             />
           </Card>
 
-          <Card
-            title="Opción B: el PDF de tu perfil"
-            subtitle="Rápido y sin esperar el correo de LinkedIn."
-          >
+          <Card title="¿No quieres esperar el correo?" subtitle="Hay dos atajos que sirven igual.">
             <ol className="steps">
-              <li>Abre tu perfil de LinkedIn en el computador.</li>
               <li>
-                Bajo tu foto, toca <b>«Más» → «Guardar en PDF»</b>.
+                <b>El PDF de tu perfil:</b> en LinkedIn, bajo tu foto, «Más» → «Guardar en PDF».
+                Súbelo en «Mi CV en PDF o Word».
               </li>
-              <li>Sube ese PDF en la primera opción de esta página, «Mi CV en PDF o Word».</li>
-            </ol>
-          </Card>
-
-          <Card
-            title="Opción C: copiar y pegar el perfil"
-            subtitle="Lo más rápido de todo, aunque reconoce menos si lees sin IA."
-          >
-            <ol className="steps">
-              <li>Abre tu perfil de LinkedIn en el computador.</li>
               <li>
-                Selecciona desde tu nombre hasta el final de la sección de aptitudes y copia
-                (<span className="mono">Ctrl+C</span>).
+                <b>Copiar y pegar:</b> selecciona tu perfil desde el nombre hasta las aptitudes y
+                pégalo en «Pegar texto de cualquier parte».
               </li>
-              <li>Pégalo abajo.</li>
             </ol>
-            <TextArea
-              label="Texto del perfil"
-              rows={8}
-              value={pasted}
-              onChange={(e) => setPasted(e.target.value)}
-              placeholder="Pega aquí…"
-            />
-            {readButtons}
           </Card>
         </>
       )}
 
       {source === 'texto' && (
         <Card
-          title="Pega tu CV"
-          subtitle="Abre tu currículum, selecciona todo, copia y pega. Si lees sin IA, ayuda que las secciones se llamen Experiencia, Educación y Habilidades."
+          title="Pega el texto"
+          subtitle="Sirve cualquier cosa que describa a una persona: tu CV, tu perfil de LinkedIn, tu portafolio, un perfil de una web de empleo. Seleccionas todo, copias y pegas; la basura del sitio se descarta sola."
         >
+          {!withAi && (
+            <div className="issue issue-tip" style={{ marginBottom: 12 }}>
+              <span className="issue-icon">i</span>
+              <div>
+                <strong>Sin IA conviene que sea un CV con secciones</strong>
+                <p>
+                  El lector incluido busca encabezados como Experiencia, Educación y Habilidades. Si
+                  pegas una página web con menús y botones, se va a perder. Con IA no importa.
+                </p>
+              </div>
+            </div>
+          )}
           <TextArea
-            label="Texto del CV"
+            label="Texto pegado"
             rows={14}
             value={pasted}
             onChange={(e) => setPasted(e.target.value)}

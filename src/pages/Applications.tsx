@@ -61,6 +61,9 @@ export function Applications() {
   const [readNotes, setReadNotes] = useState<string[]>([]);
   const [reading, setReading] = useState(false);
   const aiReady = isConfigured(ai);
+  // Leer desde el enlace necesita una herramienta de fetch del lado del
+  // servidor, y de los proveedores soportados solo Claude la tiene.
+  const canFetchLinks = aiReady && ai.provider === 'anthropic';
 
   const selected = applications.find((a) => a.id === selectedId) ?? null;
 
@@ -94,24 +97,41 @@ export function Applications() {
     setAdding(false);
   };
 
-  const createFromPosting = async (withAi: boolean) => {
+  const createFromPosting = async (withAi: boolean, fromLink = false) => {
     setReading(true);
+    let text = jobText;
     let fields = parseJobPosting(jobText, jobUrl);
     let contact = '';
+    const extraNotes: string[] = [];
 
-    if (withAi && jobText.trim()) {
+    if (fromLink) {
+      try {
+        const { fetchJobTextFromUrl } = await import('../lib/ai/extract');
+        text = await fetchJobTextFromUrl(jobUrl.trim(), ai);
+        setJobText(text);
+      } catch (e) {
+        setReading(false);
+        setReadNotes([e instanceof AiError ? e.message : 'No se pudo leer ese enlace.']);
+        return;
+      }
+    }
+
+    if (withAi && text.trim()) {
       try {
         const { extractJobWithAi } = await import('../lib/ai/extract');
-        const read = await extractJobWithAi(jobText, jobUrl, ai);
+        const read = await extractJobWithAi(text, jobUrl, ai);
         fields = read;
         contact = read.contact;
       } catch (e) {
-        fields.notes = [
+        extraNotes.push(
           e instanceof AiError ? `${e.message} Se usó el lector sin IA.` : 'Falló la lectura con IA.',
-          ...fields.notes,
-        ];
+        );
+        fields = parseJobPosting(text, jobUrl);
       }
+    } else if (fromLink) {
+      fields = parseJobPosting(text, jobUrl);
     }
+    fields.notes = [...extraNotes, ...fields.notes];
 
     const a = newApplication({
       role: fields.role,
@@ -121,7 +141,7 @@ export function Applications() {
       contact,
       source: fields.source || sourceFromUrl(jobUrl),
       url: jobUrl.trim(),
-      jobDescription: jobText.trim(),
+      jobDescription: text.trim(),
     });
     setApplications([a, ...applications]);
     setSelectedId(a.id);
@@ -192,23 +212,33 @@ export function Applications() {
           <div className="issue issue-tip" style={{ marginTop: 12 }}>
             <span className="issue-icon">i</span>
             <div>
-              <strong>¿Por qué hay que pegar el texto y no basta el enlace?</strong>
+              <strong>
+                {canFetchLinks ? 'Sobre leer desde el enlace' : '¿Por qué hay que pegar el texto?'}
+              </strong>
               <p>
-                Impulso corre entero en tu navegador y los portales de empleo bloquean que otra
-                página lea sus avisos. Traerlos pasando por un servidor intermedio significaría
-                mandarle a un tercero a qué postulas, y eso no compensa. Copiar y pegar toma cinco
-                segundos y el texto completo es justamente lo que necesita el comparador con tu CV.
+                {canFetchLinks
+                  ? 'Con Claude configurado, el aviso lo lee el servidor de Anthropic y te lo trae. No funciona en todas partes: los sitios que arman la página con JavaScript o piden sesión iniciada (LinkedIn, por ejemplo) no se dejan leer. Si falla, abre el enlace y pega el texto, que siempre funciona.'
+                  : 'Impulso corre entero en tu navegador y los portales bloquean que otra página lea sus avisos. Pasarlos por un servidor intermedio significaría contarle a un tercero a qué postulas. Copiar y pegar toma cinco segundos, y ese texto es justo lo que necesita el comparador con tu CV. Con Claude configurado aparece además un botón para leer el enlace directo.'}
               </p>
             </div>
           </div>
 
           <div className="row" style={{ marginTop: 14 }}>
+            {canFetchLinks && (
+              <Button
+                variant="primary"
+                disabled={!jobUrl.trim() || reading}
+                onClick={() => void createFromPosting(true, true)}
+              >
+                {reading ? 'Leyendo…' : '✦ Leer desde el enlace'}
+              </Button>
+            )}
             <Button
-              variant="primary"
+              variant={canFetchLinks ? 'subtle' : 'primary'}
               disabled={(!jobText.trim() && !jobUrl.trim()) || reading}
               onClick={() => void createFromPosting(aiReady)}
             >
-              {reading ? 'Leyendo…' : aiReady ? '✦ Leer con IA y crear' : 'Leer y crear postulación'}
+              {reading ? 'Leyendo…' : aiReady ? '✦ Leer el texto con IA' : 'Leer y crear postulación'}
             </Button>
             {aiReady && (
               <Button disabled={(!jobText.trim() && !jobUrl.trim()) || reading} onClick={() => void createFromPosting(false)}>

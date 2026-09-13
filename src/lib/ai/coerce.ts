@@ -19,7 +19,7 @@ import { uid } from '../utils';
 import { emptyParsed, toMonthValue } from '../import/parseCv';
 import type { ParsedCv } from '../import/parseCv';
 import type { ParsedJob } from '../import/parseJob';
-import type { BulletRewrite } from './types';
+import type { BulletRewrite, LetterDraft } from './types';
 
 type Raw = Record<string, unknown>;
 
@@ -188,4 +188,9 @@ export function coerceRewrite(raw: unknown): BulletRewrite {
     })
     .filter((o) => o.text);
   return { options, missing: strings(data.missing) };
+}
+
+export function coerceLetter(raw: unknown): LetterDraft {
+  const data = asObject(raw);
+  return { body: str(data.body), gaps: strings(data.gaps) };
 }

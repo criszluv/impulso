@@ -4,6 +4,10 @@ import { removeById, upsert } from '../lib/list';
 import type { CoverLetter } from '../types';
 import { uid, formatDate } from '../lib/utils';
 import { generateCoverLetter, relevantSkills } from '../lib/writing';
+import { isConfigured } from '../lib/ai/settings';
+import { AiError } from '../lib/ai/errors';
+import { LETTER_TONES } from '../lib/ai/types';
+import type { LetterTone } from '../lib/ai/types';
 import {
   Badge,
   Button,
@@ -32,11 +36,16 @@ function newLetter(): CoverLetter {
 }
 
 export function Letters() {
-  const { state, setLetters } = useApp();
+  const { state, setLetters, ai } = useApp();
   const { letters, applications, profile } = state;
   const [selectedId, setSelectedId] = useState<string | null>(letters[0]?.id ?? null);
   const [source, setSource] = useState('');
   const [motivation, setMotivation] = useState('');
+  const [tone, setTone] = useState<LetterTone>('directo');
+  const [writing, setWriting] = useState(false);
+  const [aiError, setAiError] = useState('');
+  const [gaps, setGaps] = useState<string[]>([]);
+  const aiReady = isConfigured(ai);
 
   const letter = letters.find((l) => l.id === selectedId) ?? null;
 
@@ -65,7 +74,38 @@ export function Letters() {
       motivation,
       keywords,
     });
+    setGaps([]);
+    setAiError('');
     patch({ body });
+  };
+
+  const generateWithAi = async () => {
+    if (!letter) return;
+    setWriting(true);
+    setAiError('');
+    setGaps([]);
+    try {
+      const { generateLetterWithAi } = await import('../lib/ai/extract');
+      const draft = await generateLetterWithAi(
+        {
+          profile,
+          company: letter.company,
+          role: letter.role,
+          recipient: letter.recipient,
+          source,
+          motivation,
+          jobDescription: linkedApp?.jobDescription ?? '',
+          tone,
+        },
+        ai,
+      );
+      patch({ body: draft.body });
+      setGaps(draft.gaps);
+    } catch (e) {
+      setAiError(e instanceof AiError ? e.message : 'No se pudo escribir la carta.');
+    } finally {
+      setWriting(false);
+    }
   };
 
   const words = letter ? letter.body.trim().split(/\s+/).filter(Boolean).length : 0;
@@ -203,12 +243,75 @@ export function Letters() {
                     hint="El párrafo que no se puede automatizar. Algo real: un producto que usas, una noticia que leíste, alguien que trabaja ahí."
                   />
                 </div>
+                {aiReady && (
+                  <div style={{ marginTop: 16 }}>
+                    <div className="field-label" style={{ marginBottom: 8 }}>
+                      Tono de la carta
+                    </div>
+                    <div className="stack" style={{ gap: 6 }}>
+                      {LETTER_TONES.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          className="stat"
+                          onClick={() => setTone(t.id)}
+                          style={{
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            font: 'inherit',
+                            color: 'inherit',
+                            padding: '9px 12px',
+                            borderColor: tone === t.id ? 'var(--accent)' : 'var(--line)',
+                            background: tone === t.id ? 'var(--accent-soft)' : 'var(--bg-soft)',
+                          }}
+                        >
+                          <b style={{ fontSize: 13.5 }}>{t.name}</b>
+                          <span>{t.detail}</span>
+                        </button>
+                      ))}
+                    </div>
+                    {!linkedApp?.jobDescription && (
+                      <p className="field-hint" style={{ marginTop: 8 }}>
+                        Vincula esta carta a una postulación que tenga el aviso pegado y la carta se
+                        escribirá cruzando tu perfil con lo que pide ese cargo.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <div className="row" style={{ marginTop: 14 }}>
-                  <Button variant="primary" onClick={generate}>
-                    ✦ Generar borrador
+                  {aiReady && (
+                    <Button variant="primary" disabled={writing} onClick={() => void generateWithAi()}>
+                      {writing ? 'Escribiendo…' : '✦ Escribir con IA'}
+                    </Button>
+                  )}
+                  <Button variant={aiReady ? 'subtle' : 'primary'} onClick={generate}>
+                    {aiReady ? 'Usar plantilla' : '✦ Generar borrador'}
                   </Button>
                   <span className="faint">Reemplaza el texto actual de la carta.</span>
                 </div>
+
+                {aiError && (
+                  <div className="issue issue-error" style={{ marginTop: 12 }}>
+                    <span className="issue-icon">✕</span>
+                    <div>
+                      <strong>{aiError}</strong>
+                    </div>
+                  </div>
+                )}
+
+                {gaps.length > 0 && (
+                  <div className="issue issue-tip" style={{ marginTop: 12 }}>
+                    <span className="issue-icon">i</span>
+                    <div>
+                      <strong>Huecos que tienes que llenar tú</strong>
+                      <p>
+                        Van marcados entre corchetes en el texto, porque son cosas que no se pueden
+                        inventar: {gaps.join(' · ')}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </Card>
             )}
           </div>

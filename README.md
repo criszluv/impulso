@@ -33,14 +33,35 @@ corresponden. El **asistente con IA** (abajo) resuelve justamente eso.
 ## Asistente con IA (opcional)
 
 Si conectas un modelo en Ajustes, el texto se interpreta en vez de adivinarse con reglas. Sirve
-para tres cosas:
+para cuatro cosas:
 
-- **Leer un CV o un perfil de LinkedIn** con bastante más precisión, sobre todo cuando el PDF llega
-  desordenado o con las columnas mezcladas.
-- **Leer un aviso de trabajo** pegado, sacando cargo, empresa, ubicación, sueldo y contacto de
-  entre la basura del portal.
+- **Leer un perfil profesional pegado de cualquier parte**: un CV en PDF, tu perfil de LinkedIn, tu
+  portafolio, un Google Docs, la ficha de una bolsa de empleo. Los menús, botones y avisos de
+  cookies que vienen pegados de una web se descartan solos.
+- **Leer un aviso de trabajo**, pegado o —con Claude— directamente desde su enlace.
+- **Escribir la carta de presentación** cruzando tu perfil con el aviso al que postulas, en el tono
+  que elijas: directo, formal, cercano o muy breve.
 - **Reescribir un logro** del CV: propone tres versiones y, si al logro le falta una cifra, la
   pide en vez de inventarla.
+
+### Cartas: cómo se evita que invente
+
+Una carta que afirma cosas falsas sobre ti o sobre la empresa es peor que no mandar carta. Tres
+medidas, en orden de fiabilidad:
+
+1. El perfil se le entrega formateado y se le prohíbe usar cualquier dato que no esté ahí.
+2. Sobre la empresa solo puede afirmar lo que diga el aviso o lo que tú hayas escrito como motivo;
+   si no, tiene que dejar un hueco entre corchetes.
+3. **Una verificación que no depende del modelo**: si no escribiste un motivo y la carta no dejó
+   ningún hueco, la app asume que el motivo se lo inventó y te avisa que revises ese párrafo.
+   Probando con un modelo local, el punto 2 se saltó y el 3 lo atajó.
+
+### Leer un aviso desde su enlace
+
+Solo con Claude, que es el único de los proveedores soportados con una herramienta de fetch del
+lado del servidor. No funciona en todas partes: los sitios que arman la página con JavaScript o
+piden sesión iniciada —LinkedIn entre ellos— no se dejan leer, y ahí la app te dice que pegues el
+texto. **Esta parte no está probada de punta a punta**, porque requiere una clave de Anthropic.
 
 ### Con qué se puede conectar
 
