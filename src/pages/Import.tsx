@@ -8,6 +8,8 @@ import type { ParsedCv } from '../lib/import/parseCv';
 import { parseLinkedInCsvs } from '../lib/import/linkedin';
 import { applyParsed, SECTION_LABELS, countOf } from '../lib/import/apply';
 import type { SectionKey, ImportMode } from '../lib/import/apply';
+import { AiAssist } from '../components/AiAssist';
+import { ImportReview } from '../components/ImportReview';
 import { isConfigured } from '../lib/ai/settings';
 import { Button, TextArea, Select, Toggle } from '../components/ui';
 
@@ -30,22 +32,32 @@ export function ImportPage() {
     [parsed, setParsed] = useState<ParsedCv | null>(null),
     [include, setInclude] = useState(new Set(sections)),
     [mode, setMode] = useState<ImportMode>('agregar'),
-    [useAi, setUseAi] = useState(false);
+    [useAi, setUseAi] = useState(false),
+    [lastText, setLastText] = useState(''),
+    [method, setMethod] = useState('');
   const read = async (value: string) => {
+    setLastText(value);
     if (!value.trim())
       throw new Error(
         'No encontramos texto. Si es una foto o un escaneo, puedes escribir tus datos con la guía paso a paso.',
       );
-    if (useAi && isConfigured(ai)) {
+    setLastText(value);
+    if (useAi) {
+      if (!isConfigured(ai)) throw new Error('Activa la IA primero o elige la lectura básica.');
       const { extractCvWithAi } = await import('../lib/ai/extract');
-      return await extractCvWithAi(value, ai);
+      const result = await extractCvWithAi(value, ai);
+      setMethod('Lectura con IA');
+      return result;
     }
+    setMethod('Lectura básica sin IA');
     return parseCvText(value);
   };
   const fileRead = async (file: File) => {
     setBusy(true);
     setError('');
     setParsed(null);
+    setLastText('');
+    setMethod('');
     try {
       if (file.size > 15 * 1024 * 1024)
         throw new Error('El archivo es demasiado grande. Prueba uno de menos de 15 MB.');
@@ -55,6 +67,8 @@ export function ImportPage() {
         return;
       }
       if (kind === 'zip') {
+        setLastText('');
+        setMethod('Lectura de datos de LinkedIn, sin IA');
         setParsed(parseLinkedInCsvs(await zipToCsvMap(file)));
         return;
       }
@@ -96,6 +110,19 @@ export function ImportPage() {
           <p>Leemos el archivo, te mostramos lo que encontramos y tú decides qué guardar.</p>
         </div>
       </div>
+      <fieldset disabled={busy} className="plain-fieldset">
+        <AiAssist
+          title="Deja que la IA ordene tu currículum"
+          description="Ayuda a separar cargos, empresas, fechas y habilidades, incluso cuando el documento viene desordenado. Después podrás corregir lo que haya entendido."
+        >
+          <Toggle label="Usar IA para leer mi currículum" checked={useAi} onChange={setUseAi} />
+          <p className="field-hint">
+            {useAi
+              ? 'Al elegir un archivo o leer el texto, se enviará al modelo configurado.'
+              : 'Ahora usarás la lectura básica. Activa la opción de arriba para usar IA.'}
+          </p>
+        </AiAssist>
+      </fieldset>
       <section className="upload-zone">
         <FileText size={42} />
         <h2>Elige tu archivo</h2>
@@ -116,20 +143,7 @@ export function ImportPage() {
         </Button>
         <span className="field-hint">También puedes buscarlo en la carpeta Descargas.</span>
       </section>
-      {isConfigured(ai) && (
-        <details>
-          <summary>Usar mi asistente opcional</summary>
-          <p>
-            Al activarlo, el texto del archivo o el texto pegado se envía al servicio que
-            configuraste. Puedes dejarlo desactivado para leerlo solo en este navegador.
-          </p>
-          <Toggle
-            label="Enviar el texto al asistente para leerlo"
-            checked={useAi}
-            onChange={setUseAi}
-          />
-        </details>
-      )}
+
       <details>
         <summary>Prefiero copiar y pegar el texto</summary>
         <TextArea
@@ -144,6 +158,7 @@ export function ImportPage() {
           onClick={async () => {
             setBusy(true);
             setError('');
+            setParsed(null);
             try {
               setParsed(await read(text));
             } catch (e) {
@@ -173,6 +188,40 @@ export function ImportPage() {
           {error}
         </p>
       )}
+      <div className="row">
+        {lastText && isConfigured(ai) && !busy && method !== 'Lectura con IA' && (
+          <Button
+            onClick={async () => {
+              setBusy(true);
+              setError('');
+              setParsed(null);
+              try {
+                const { extractCvWithAi } = await import('../lib/ai/extract');
+                setParsed(await extractCvWithAi(lastText, ai));
+                setMethod('Lectura con IA');
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'No pudimos leer con IA.');
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Volver a leer con IA
+          </Button>
+        )}
+        {error && lastText && (
+          <Button
+            disabled={busy}
+            onClick={() => {
+              setParsed(parseCvText(lastText));
+              setMethod('Lectura básica sin IA');
+              setError('');
+            }}
+          >
+            Usar lectura básica con el mismo texto
+          </Button>
+        )}
+      </div>
       {parsed && !hasData && (
         <p role="status" className="notice">
           No pudimos reconocer los datos. Puedes probar pegando el texto o{' '}
@@ -183,13 +232,18 @@ export function ImportPage() {
         <section className="form-sheet">
           <span className="eyebrow">Revisa antes de guardar</span>
           <h2>Esto es lo que encontramos.</h2>
+          <p className="pill mint" role="status">
+            {method}
+          </p>
           <p>
             {parsed.personal.fullName || 'No reconocimos el nombre'} ·{' '}
             {parsed.personal.headline || 'Trabajo sin identificar'}
           </p>
           <p className="field-hint">
-            La lectura puede equivocarse. Después podrás corregir cada dato.
+            Revisa especialmente el nombre, las fechas y qué tareas corresponden a cada trabajo.
+            Puedes corregirlos antes de guardar.
           </p>
+          <ImportReview parsed={parsed} onChange={setParsed} />
           <div className="stack">
             {sections
               .filter((k) => countOf(parsed, k) > 0)
@@ -241,7 +295,7 @@ export function ImportPage() {
             </Select>
           )}
           {parsed.notes.length > 0 && (
-            <details>
+            <details open>
               <summary>Observaciones de la lectura</summary>
               {parsed.notes.map((n, i) => (
                 <p key={i}>{n}</p>

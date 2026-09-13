@@ -26,6 +26,7 @@ export const emptyProfile: Profile = {
 export const initialState: AppState = {
   version: 1,
   preferences: {
+    country: '',
     role: '',
     city: '',
     travel: '',

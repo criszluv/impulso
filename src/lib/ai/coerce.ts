@@ -53,12 +53,11 @@ function strings(value: unknown): string[] {
  */
 function month(value: unknown): string {
   const raw = str(value);
-  if (!raw) return '';
+  if (!raw || /^\d{4}$/.test(raw)) return '';
   if (/^\d{4}-\d{2}$/.test(raw)) return raw;
   const normalized = toMonthValue(raw);
   if (normalized) return normalized;
-  const year = raw.match(/\b(19|20)\d{2}\b/);
-  return year ? `${year[0]}-01` : '';
+  return ''; // Do not invent January when only a year was provided.
 }
 
 const LEVELS: LanguageLevel[] = ['Básico', 'Intermedio', 'Avanzado', 'Nativo'];
@@ -100,9 +99,8 @@ export function coerceCv(raw: unknown): ParsedCv {
       location: str(e.location),
       startDate: month(e.startDate),
       endDate,
-      // Si no hay fecha de término, el cargo sigue vigente aunque el modelo
-      // no haya marcado la casilla.
-      current: bool(e.current) || !endDate,
+      // A missing end date does not mean the person still has this job.
+      current: bool(e.current),
       bullets: strings(e.bullets),
       tech: strings(e.tech),
     } satisfies Experience;

@@ -166,13 +166,15 @@ test('importación de texto con revisión antes de guardar', async ({ page }) =>
 test('búsqueda externa utiliza las preferencias', async ({ page }) => {
   await page.goto('/#/buscar');
   await page.getByLabel('¿Qué trabajo buscas?').fill('Aseo');
-  await page.getByLabel('¿En qué comuna o ciudad?').fill('Osorno');
+  await page.getByLabel('Ciudad (opcional)').fill('Osorno');
   await page.getByLabel('Horario', { exact: true }).selectOption('Media jornada');
   const href = await page
-    .getByRole('link', { name: 'Buscar mis opciones' })
+    .getByRole('link', { name: 'Buscar en Chiletrabajos' })
     .first()
     .getAttribute('href');
-  expect(decodeURIComponent(href!)).toContain('site:bne.cl Aseo Osorno Media jornada empleo');
+  expect(decodeURIComponent(href!)).toContain(
+    'site:chiletrabajos.cl Aseo Osorno Chile Media jornada empleo',
+  );
 });
 test('diseño móvil y escritorio: navegación, contraste y accesibilidad', async ({ page }) => {
   await page.goto('/');
@@ -248,7 +250,7 @@ test('cartas y entrevistas se pueden preparar, editar y recuperar', async ({ pag
   await page.goto('/#/cartas');
   await page.getByRole('button', { name: 'Preparar mi primera carta' }).click();
   await page.getByLabel('Trabajo al que postulas').fill('Auxiliar de cocina');
-  await page.getByLabel('Empresa', { exact: true }).fill('Restaurante de prueba');
+  await page.getByLabel('Empresa (opcional)', { exact: true }).fill('Restaurante de prueba');
   await page.getByRole('button', { name: 'Preparar un borrador', exact: true }).click();
   await expect(page.getByLabel('Carta de presentación', { exact: true })).toContainText(
     'Auxiliar de cocina',

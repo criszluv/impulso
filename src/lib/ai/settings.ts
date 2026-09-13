@@ -216,3 +216,36 @@ export function readerName(settings: AiSettings): string {
   if (settings.reader === 'jina') return 'r.jina.ai';
   return '';
 }
+
+/** Only loopback addresses qualify as processing on this computer. */
+export function isLocalEndpoint(settings: AiSettings): boolean {
+  if (settings.provider !== 'openai-compat') return false;
+  try {
+    const u = new URL(settings.baseUrl);
+    return (
+      ['http:', 'https:'].includes(u.protocol) &&
+      ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function localTransportUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const origin = window.location.hostname;
+    if (
+      ['localhost', '127.0.0.1', '[::1]'].includes(origin) &&
+      ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname) &&
+      u.protocol === 'http:' &&
+      ['/v1/models', '/v1/chat/completions'].includes(u.pathname)
+    ) {
+      const engine = u.port === '11434' ? 'ollama' : u.port === '1234' ? 'lmstudio' : '';
+      if (engine) return import.meta.env.BASE_URL + 'api/local-ai/' + engine + u.pathname;
+    }
+  } catch {
+    /* Custom services keep their own endpoint. */
+  }
+  return url;
+}

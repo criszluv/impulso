@@ -117,6 +117,8 @@ export interface CvConfig {
 }
 
 export interface CoverLetter {
+  motivation: string;
+  tone: 'directo' | 'formal' | 'cercano' | 'breve';
   id: Id;
   title: string;
   company: string;
@@ -140,6 +142,7 @@ export interface StarAnswer {
 }
 
 export interface SearchPreferences {
+  country: string;
   role: string;
   city: string;
   travel: string;

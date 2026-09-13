@@ -2063,3 +2063,80 @@ details[open] > summary {
     gap: 15px;
   }
 }
+
+/* Additional tools use the existing palette, spacing and controls. */
+.utility-nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px 22px;
+  padding: 0 0 24px;
+}
+.utility-nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.utility-nav .ai-shortcut {
+  color: var(--accent);
+}
+.ai-assist {
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin: 20px 0 28px;
+}
+.ai-assist h2 {
+  margin: 16px 0 12px;
+  font-size: 24px;
+}
+.ai-assist > .text-link {
+  margin-top: 14px;
+}
+.feed-sources {
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 20px;
+}
+.feed-sources p {
+  margin: 3px 0;
+}
+.job-detail {
+  scroll-margin-top: 20px;
+}
+.job-detail h2 {
+  margin-top: 22px;
+}
+.job-description {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 24px 0;
+  line-height: 1.8;
+}
+.portal-card h3,
+.portal-card .pill {
+  overflow-wrap: anywhere;
+}
+.portal-card .pill {
+  white-space: normal;
+}
+@media (max-width: 600px) {
+  .utility-nav {
+    justify-content: flex-start;
+    padding-bottom: 16px;
+    gap: 6px 20px;
+  }
+  .ai-assist {
+    padding: 20px;
+  }
+}
+
+.plain-fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}

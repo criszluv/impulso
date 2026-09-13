@@ -19,10 +19,11 @@ Usa siempre el mismo origen y navegador. localhost y 127.0.0.1 tienen almacenami
 
 - **Inicio:** una próxima acción, acceso a los tres pasos y pendientes.
 - **Mi currículum:** guía de seis pasos, compatible con oficios, trabajos informales y primer empleo. Se acepta teléfono sin correo. Las cifras no son obligatorias.
-- **Buscar trabajo:** preferencias de ubicación, horario y traslado. Abre búsquedas de Google limitadas a BNE y Chiletrabajos, o sus portales directamente. Los enlaces no representan un catálogo integrado ni ofertas verificadas en tiempo real.
+- **Buscar trabajo:** selector de 25 países y ciudad libre con sugerencias. Ofertas remotas de Remotive y Jobicy dentro de la app, con descripción, fuente y guardado sin duplicados. La ciudad se usa en búsquedas externas de Google, LinkedIn, Indeed, InfoJobs (España) y Chiletrabajos (Chile). No hay servicio público/BNE.
 - **Mis postulaciones:** lista accesible, registro del aviso, pasos para enviar el currículum, confirmación explícita del envío, notas y recordatorios descargables para el calendario.
 - **Ayuda y mis datos:** copias descargables, validación y revisión antes de restaurar, versión anterior y borrado local.
-- **Herramientas complementarias:** importación PDF/Word/texto/ZIP de LinkedIn, edición completa del perfil, cartas, borradores de LinkedIn y preparación de entrevistas.
+- **IA y cartas visibles:** accesos permanentes a activar IA, leer un CV y crear cartas de presentación. Las cartas funcionan sin empleo guardado e incluyen tono y motivación. Una oferta integrada pasa su descripción directamente a la carta.
+- **Herramientas complementarias:** importación PDF/Word/texto/ZIP de LinkedIn, edición completa del perfil, borradores de LinkedIn y preparación de entrevistas.
 
 ## Documentos y datos
 
@@ -34,11 +35,37 @@ Un error de cuota o almacenamiento se muestra al usuario; nunca se anuncia un gu
 
 En equipos compartidos, cualquiera que use ese mismo navegador puede acceder a los datos. La app explica cómo descargar una copia y borrar los datos al terminar.
 
-## IA opcional
+## IA en tu equipo
 
-La ayuda principal funciona localmente, sin claves ni IA. La configuración avanzada mantiene la conexión opcional a servicios de redacción o modelos locales. Al activar una operación con IA se explica qué datos se envían al servicio configurado. Las claves quedan fuera de las copias exportadas.
+La barra de herramientas muestra **Activar IA**, **Leer mi CV con IA** y **Cartas de presentación**. Configurar un modelo no envía datos: la importación exige activar el interruptor de IA y la carta tiene su propio botón.
 
-No hay una IA alojada por Impulso, cuentas, sincronización en la nube ni notificaciones en segundo plano. No se envían correos ni postulaciones automáticamente. Compartir PDF depende de las capacidades del navegador; hay una alternativa de descarga.
+1. Instala y abre [Ollama](https://ollama.com/download) o [LM Studio](https://lmstudio.ai/). Descarga/carga un modelo de texto; en LM Studio inicia su servidor.
+2. En Impulso, abre **Activar IA**, elige el servicio y presiona **Buscar modelos en mi equipo**.
+3. Elige el modelo y pulsa **Probar conexión**. Los fallos se muestran como fallos.
+4. Vuelve a importar o a redactar. Revisa el resultado antes de guardarlo/enviarlo.
+
+El servidor local de Impulso conecta con los puertos de loopback 11434 (Ollama) y 1234 (LM Studio). Evita configurar CORS en esos servicios. Los destinos son fijos, el cuerpo tiene límite y las operaciones no se registran ni se guardan en el servidor. Los endpoints personalizados conservan el transporte directo anterior.
+
+La lectura distingue IA de extracción básica. Permite corregir contacto, cargos, empresas, tareas y fechas antes de importar; conserva los datos actuales hasta confirmar. Si falla la IA, puedes procesar el mismo texto con el lector básico. El ZIP de LinkedIn se lee estructuralmente sin IA. No hay OCR para PDFs escaneados.
+
+Las cartas incluyen aviso opcional, motivación y tono para la IA. Usar una oferta aporta contexto; el modelo sigue siendo quien redacta y relaciona ese contexto con el perfil. Se puede recuperar el texto anterior después de generar otra versión.
+
+Las conexiones externas existentes se mantienen para quien ya tenga su servicio. No hay suscripciones, cobros ni sistema de créditos en Impulso. Antes de un servicio público de pago hará falta un backend que proteja claves, registre consumo y controle saldos. Los modelos/precios de proveedores externos deben verificarse al integrar esa etapa.
+
+## Ofertas reales y cobertura
+
+- [Remotive: API oficial y condiciones](https://github.com/remotive-com/remote-jobs-api): hasta 500 avisos recientes por consulta, publicados con 24 h de retraso. Se mantiene fuente y enlace original. No se redistribuyen a Google Jobs ni otros agregadores.
+- [Jobicy: API oficial y condiciones](https://jobicy.com/jobs-rss-feed): hasta 200 avisos recientes; fuente y enlace original siempre visibles.
+- Ambas son fuentes de empleo remoto. El número real de avisos cambia y puede ser menor que esos máximos. No cubren exhaustivamente trabajos presenciales, oficios ni todos los países. Muchos avisos están en inglés.
+- El filtro local compara el país, las regiones explícitas o una ubicación mundial declarada. No deduce elegibilidad por nacionalidad ni residencia; omite ubicaciones ambiguas al filtrar por país. La ciudad **no** filtra ofertas remotas: se utiliza para ampliar la búsqueda externa. Horario filtra jornada completa o parcial cuando la fuente lo declara.
+- El usuario lee y guarda el aviso aquí; el envío final se hace en la fuente original. Guardar nunca marca una candidatura como enviada. Una oferta podría haber cerrado desde la última consulta.
+- [La documentación de Google para empleos](https://developers.google.com/search/docs/appearance/structured-data/job-posting) describe cómo publicar/indexar avisos. Esa integración no permite obtener su catálogo en Impulso. Aquí Google es un enlace de búsqueda externa; no se scrapea su interfaz.
+
+El servicio de ofertas funciona con **npm run dev**, **npm run preview** y el lanzador local. Hace peticiones solo a dos fuentes fijas, sin enviar perfil ni filtros personales. Guarda una caché de ofertas públicas en **.cache/jobs-v1.json** (excluida de Git): 6 h tras una consulta correcta, espera de 15 min tras fallos y copia antigua de hasta 48 h identificada como tal. Comparte peticiones concurrentes. La API de modelos locales no guarda caché.
+
+Una publicación puramente estática de la carpeta dist no incluye estos servicios locales. En ese caso la app conserva los documentos y enlaces externos y muestra el error al intentar obtener ofertas. Mantener el funcionamiento local es el alcance de esta etapa.
+
+No hay cuentas, sincronización en la nube ni notificaciones en segundo plano. No se envían correos ni postulaciones automáticamente. Compartir PDF depende del navegador; hay una alternativa de descarga.
 
 ## Diseño
 
@@ -49,7 +76,6 @@ Referencias consultadas:
 - [GOV.UK Design System: Question pages](https://design-system.service.gov.uk/patterns/question-pages/): dividir el recorrido en preguntas manejables.
 - [W3C WAI: Help users understand what things are and how to use them](https://www.w3.org/WAI/WCAG2/supplemental/objectives/o1-understandable/): controles familiares y propósito claro.
 - [W3C WAI: Accessibility principles](https://www.w3.org/WAI/fundamentals/accessibility-principles/): estructura, etiquetas y contraste.
-- [BNE](https://www.bne.cl/) y [Chiletrabajos](https://www.chiletrabajos.cl/): destinos externos de búsqueda.
 
 Estas referencias orientan el diseño; las comprobaciones automáticas no equivalen a una certificación de accesibilidad.
 
@@ -64,7 +90,9 @@ npx playwright install chromium
 npm test
 ```
 
-Las pruebas usan contextos aislados del navegador y datos ficticios, sin modificar el perfil del usuario. Cubren el recorrido inicial, PDF legible y multipágina, persistencia, errores de guardado, migración, importación, recuperación y deshacer, envío confirmado, calendario, cartas y entrevistas, navegación móvil y comprobaciones axe.
+Las 19 pruebas usan contextos aislados del navegador y datos ficticios, sin modificar el perfil del usuario. Cubren el recorrido inicial, PDF legible y multipágina, persistencia, errores de guardado, migración, importación, recuperación y deshacer, envío confirmado, calendario, cartas y entrevistas, navegación móvil y comprobaciones axe.
+
+Los servicios de IA y empleo se simulan en las pruebas para hacerlas reproducibles y no consumir APIs. Se comprobó por separado la llegada real de ofertas de ambas fuentes; no había servidor de IA local activo durante esta revisión.
 
 Los resultados y capturas se guardan en test-results, excluido de Git.
 

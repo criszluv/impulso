@@ -252,7 +252,7 @@ export function Settings() {
         </p>
       </aside>
       <Link to="/asistente" className="text-link">
-        Configuración opcional del asistente (avanzada)
+        Configurar IA para currículums y cartas
         <ArrowRight size={16} />
       </Link>
       <details className="danger-zone">

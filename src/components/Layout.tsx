@@ -8,8 +8,11 @@ import {
   Bookmark,
   CircleHelp,
   ShieldCheck,
+  Sparkles,
+  Mail,
 } from 'lucide-react';
 import { ErrorBoundary } from './ErrorBoundary';
+import { isConfigured } from '../lib/ai/settings';
 import { useApp } from '../state/context';
 
 const links = [
@@ -19,7 +22,7 @@ const links = [
   { to: '/postulaciones', label: 'Mis postulaciones', mobile: 'Mis trabajos', icon: Bookmark },
 ];
 export function Layout() {
-  const { saved, saveError } = useApp();
+  const { saved, saveError, ai } = useApp();
   const location = useLocation();
   const main = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -59,6 +62,20 @@ export function Layout() {
         </Link>
       </header>
       <main id="contenido" ref={main} tabIndex={-1} className="main">
+        <nav className="utility-nav" aria-label="Herramientas de ayuda">
+          <Link className="ai-shortcut" to="/asistente">
+            <Sparkles size={18} />
+            {isConfigured(ai) ? 'Mi IA' : 'Activar IA'}
+          </Link>
+          <Link to="/importar">
+            <FileText size={18} />
+            Leer mi CV con IA
+          </Link>
+          <Link to="/cartas">
+            <Mail size={18} />
+            Cartas de presentación
+          </Link>
+        </nav>
         {saveError && (
           <div className="save-warning" role="alert">
             <strong>No está guardado.</strong> {saveError}{' '}

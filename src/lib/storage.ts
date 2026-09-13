@@ -113,6 +113,8 @@ const schema = z.object({
   letters: z
     .array(
       z.object({
+        motivation: text,
+        tone: z.enum(['directo', 'formal', 'cercano', 'breve']).default('directo'),
         id: z.string(),
         title: text,
         company: text,
@@ -141,6 +143,7 @@ const schema = z.object({
   theme: z.enum(['dark', 'light']).default('light'),
   preferences: z
     .object({
+      country: text,
       role: text,
       city: text,
       travel: text,
@@ -150,6 +153,7 @@ const schema = z.object({
       completed: z.boolean().default(false),
     })
     .default({
+      country: '',
       role: '',
       city: '',
       travel: '',

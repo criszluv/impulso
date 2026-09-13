@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { AiError } from './errors';
 import type { AiSettings } from './settings';
+import { localTransportUrl } from './settings';
 
 /**
  * Transporte para cualquier servidor que hable el formato de OpenAI: Ollama y
@@ -57,7 +58,12 @@ async function post(
   body: unknown,
 ): Promise<Response> {
   try {
-    return await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+    return await fetch(localTransportUrl(url), {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(180000),
+    });
   } catch {
     throw new AiError(
       `No se pudo conectar con ${url}. Si es un servidor local, revisa que esté encendido; si es LM Studio, que tenga «Enable CORS» activado.`,
