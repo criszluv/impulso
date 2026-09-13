@@ -17,15 +17,45 @@ traer lo que ya existe. Los cuatro caminos procesan el archivo en el navegador; 
 | **CV en PDF** | Extrae el texto con pdf.js y lo reparte en secciones. Necesita un PDF con texto seleccionable: un escaneo no se puede leer y la app lo dice. |
 | **CV en Word (.docx)** | Un `.docx` es un ZIP con el documento en XML; se abre y se lee de ahí. |
 | **Copia de datos de LinkedIn** | El ZIP oficial (Configuración → Privacidad de los datos → Obtener una copia de tus datos). Es la vía más fiel: son los CSV tal como los tiene LinkedIn, no un texto adivinado. |
+| **PDF del perfil de LinkedIn** | «Más → Guardar en PDF» en tu perfil, sin esperar el correo de la copia de datos. |
 | **Pegar texto** | El camino que funciona siempre, con cualquier formato. |
 
 Lo detectado **nunca se guarda directo**: se muestra en una pantalla de revisión con el conteo por
 sección, casillas para descartar lo que no sirva y la opción de reemplazar o sumar a lo que ya
 tengas. Recién ahí pasa al perfil, donde se edita campo por campo.
 
-El lector de CV es heurístico: ancla las fechas para cortar los cargos, separa puesto de empresa
-con un diccionario de palabras, y reconoce encabezados en español y en inglés. Acierta bastante
-pero no siempre, y por eso el paso de revisión es obligatorio.
+Hay dos lectores. El **incluido** es heurístico: ancla las fechas para cortar los cargos, separa
+puesto de empresa con un diccionario de palabras y reconoce encabezados en español y en inglés.
+Funciona sin conexión y sin costo, pero adivina la estructura del documento, así que con un CV de
+dos columnas, con tablas o con encabezados poco comunes se equivoca y manda datos a campos que no
+corresponden. El **asistente con IA** (abajo) resuelve justamente eso.
+
+## Asistente con IA (opcional)
+
+Si configuras una clave de la API de Claude en Ajustes, el mismo texto lo interpreta un modelo en
+vez de las reglas locales. Sirve para tres cosas:
+
+- **Leer un CV o un perfil de LinkedIn** con bastante más precisión, sobre todo cuando el PDF llega
+  desordenado o con las columnas mezcladas.
+- **Leer un aviso de trabajo** pegado, sacando cargo, empresa, ubicación, sueldo y contacto de
+  entre la basura del portal.
+- **Reescribir un logro** del CV: propone tres versiones y, si al logro le falta una cifra, la
+  pide en vez de inventarla.
+
+Detalles que importan:
+
+- **Es opcional y con tu propia clave.** Sin clave, la app funciona completa con el lector
+  incluido; la lectura sin IA queda siempre disponible como alternativa y como respaldo automático
+  si la llamada falla.
+- **La clave vive solo en tu navegador**, en una entrada de `localStorage` aparte del resto del
+  estado, y **la copia de seguridad que exportas no la incluye**. Como la app no tiene servidor, la
+  petición sale directo del navegador a la API de Anthropic (`dangerouslyAllowBrowser`): es
+  aceptable porque cada persona pone su clave, pero por lo mismo no conviene guardarla en un equipo
+  compartido.
+- **Solo viaja el texto que le pidas leer** en ese momento. El resto del perfil, las postulaciones
+  y las notas no salen del equipo.
+- El SDK y el esquema se cargan solo cuando la IA se usa de verdad, así que quien no la active no
+  paga ese peso en el arranque.
 
 ## Qué más hace
 
@@ -115,8 +145,8 @@ npm run lint
 ## Stack
 
 React 19, TypeScript, Vite y React Router (modo hash, para que funcione servido desde cualquier
-subdirectorio). `pdfjs-dist` y `jszip` se cargan solo cuando importas un archivo, así que no pesan
-en el arranque. Sin librería de estado ni de UI: el estado vive en un contexto con `useState` y los
+subdirectorio). `pdfjs-dist`, `jszip`, `@anthropic-ai/sdk` y `zod` se cargan solo cuando los
+necesitas, así que no pesan en el arranque. Sin librería de estado ni de UI: el estado vive en un contexto con `useState` y los
 estilos son CSS plano con variables, incluidas las reglas `@media print` que generan el PDF.
 
 ## Estructura
@@ -128,6 +158,10 @@ src/
     analysis.ts    revisión de logros y resúmenes, calce con la oferta, completitud del perfil
     ats.ts         reglas de compatibilidad con filtros automáticos
     writing.ts     generadores: resumen, logro, carta, LinkedIn, banco de preguntas
+    ai/
+      settings.ts  clave y modelo, guardados aparte del resto del estado
+      client.ts    cliente del SDK de Anthropic y traducción de errores
+      extract.ts   esquemas y prompts de lectura de CV, avisos y logros
     import/
       files.ts     texto desde PDF, DOCX y ZIP, y parser de CSV
       parseCv.ts   lector heurístico de un CV en texto plano

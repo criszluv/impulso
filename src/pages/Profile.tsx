@@ -330,6 +330,8 @@ export function ProfilePage() {
                 </div>
                 <BulletEditor
                   bullets={e.bullets}
+                  role={e.role}
+                  company={e.company}
                   onChange={(next) => patchAt('experience', profile.experience, e.id, { bullets: next })}
                 />
                 <TagInput

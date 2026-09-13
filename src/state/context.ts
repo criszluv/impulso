@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react';
+import type { AiSettings } from '../lib/ai/settings';
 import type {
   AppState,
   Application,
@@ -28,6 +29,9 @@ export interface AppContextValue {
   setAnswers: (items: StarAnswer[]) => void;
   replaceAll: (next: AppState) => void;
   saved: boolean;
+  /** Config del asistente con IA. Vive aparte del estado para que la clave no viaje en las copias de seguridad. */
+  ai: AiSettings;
+  setAi: (next: AiSettings) => void;
 }
 
 export const AppContext = createContext<AppContextValue | null>(null);

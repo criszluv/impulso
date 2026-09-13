@@ -1,23 +1,51 @@
 import { useState } from 'react';
 import { ACTION_VERBS, reviewBullet } from '../lib/analysis';
 import { buildBullet } from '../lib/writing';
+import { useApp } from '../state/context';
+import { hasAiKey } from '../lib/ai/settings';
+import { AiError } from '../lib/ai/errors';
+import type { BulletRewrite } from '../lib/ai/extract';
 import { Button, Field, IssueList, TextInput } from './ui';
 
 /** Editor de los logros de un cargo, con revisión en vivo y asistente XYZ. */
 export function BulletEditor({
   bullets,
   onChange,
+  role = '',
+  company = '',
 }: {
   bullets: string[];
   onChange: (next: string[]) => void;
+  role?: string;
+  company?: string;
 }) {
+  const { ai } = useApp();
+  const aiReady = hasAiKey(ai);
   const [openReview, setOpenReview] = useState<number | null>(null);
   const [wizard, setWizard] = useState(false);
+  const [rewriting, setRewriting] = useState<number | null>(null);
+  const [suggestions, setSuggestions] = useState<{ index: number; data: BulletRewrite } | null>(null);
+  const [aiError, setAiError] = useState('');
 
   const update = (index: number, value: string) => {
     const next = [...bullets];
     next[index] = value;
     onChange(next);
+  };
+
+  const improve = async (index: number) => {
+    setRewriting(index);
+    setAiError('');
+    setSuggestions(null);
+    try {
+      const { rewriteBulletWithAi } = await import('../lib/ai/extract');
+      const data = await rewriteBulletWithAi(bullets[index], { role, company }, ai);
+      setSuggestions({ index, data });
+    } catch (e) {
+      setAiError(e instanceof AiError ? e.message : 'No se pudo generar la reescritura.');
+    } finally {
+      setRewriting(null);
+    }
   };
 
   return (
@@ -47,6 +75,17 @@ export function BulletEditor({
                   >
                     {b.trim() ? (worst ? `⚠ ${issues.filter((x) => x.level !== 'ok').length}` : '✓') : '—'}
                   </Button>
+                  {aiReady && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      title="Mejorar con IA"
+                      disabled={!b.trim() || rewriting !== null}
+                      onClick={() => void improve(i)}
+                    >
+                      {rewriting === i ? '…' : '✦'}
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="ghost"
@@ -62,9 +101,61 @@ export function BulletEditor({
                   <IssueList issues={issues} />
                 </div>
               )}
+              {suggestions?.index === i && (
+                <div className="item" style={{ marginTop: 8, marginBottom: 0 }}>
+                  <div className="item-head">
+                    <h3>Tres formas de decirlo</h3>
+                    <span className="spacer" />
+                    <Button size="sm" variant="ghost" onClick={() => setSuggestions(null)}>
+                      Cerrar
+                    </Button>
+                  </div>
+                  <div className="item-body stack" style={{ gap: 10 }}>
+                    {suggestions.data.options.map((option) => (
+                      <div className="stat" key={option.text}>
+                        <p style={{ fontSize: 13.5 }}>{option.text}</p>
+                        <span style={{ display: 'block', marginTop: 6 }}>{option.note}</span>
+                        <div className="row" style={{ marginTop: 8 }}>
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            onClick={() => {
+                              update(i, option.text);
+                              setSuggestions(null);
+                            }}
+                          >
+                            Usar esta
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    {suggestions.data.missing.length > 0 && (
+                      <div className="issue issue-tip">
+                        <span className="issue-icon">i</span>
+                        <div>
+                          <strong>Datos que faltan para que quede sólido</strong>
+                          <p>
+                            No se inventaron cifras. Si tienes estos números, agrégalos tú:{' '}
+                            {suggestions.data.missing.join(' · ')}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
+
+        {aiError && (
+          <div className="issue issue-error">
+            <span className="issue-icon">✕</span>
+            <div>
+              <strong>{aiError}</strong>
+            </div>
+          </div>
+        )}
 
         <div className="row">
           <Button size="sm" onClick={() => onChange([...bullets, ''])}>

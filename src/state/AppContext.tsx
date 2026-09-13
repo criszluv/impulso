@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { AppState } from '../types';
 import { initialState } from '../lib/defaults';
+import { clearAiSettings, loadAiSettings, saveAiSettings } from '../lib/ai/settings';
+import type { AiSettings } from '../lib/ai/settings';
 import { AppContext } from './context';
 import type { AppContextValue } from './context';
 
@@ -26,6 +28,7 @@ function loadState(): AppState {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(loadState);
   const [saved, setSaved] = useState(false);
+  const [ai, setAiState] = useState<AiSettings>(loadAiSettings);
   const timer = useRef<number | undefined>(undefined);
   const firstRun = useRef(true);
 
@@ -53,11 +56,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((prev) => updater(prev));
   }, []);
 
+  const setAi = useCallback((next: AiSettings) => {
+    setAiState(next);
+    if (next.apiKey.trim()) saveAiSettings(next);
+    else clearAiSettings();
+  }, []);
+
   const value = useMemo<AppContextValue>(
     () => ({
       state,
       apply,
       saved,
+      ai,
+      setAi,
       patchPersonal: (patch) =>
         apply((s) => ({ ...s, profile: { ...s.profile, personal: { ...s.profile.personal, ...patch } } })),
       setProfileList: (key, items) => apply((s) => ({ ...s, profile: { ...s.profile, [key]: items } })),
@@ -67,7 +78,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAnswers: (items) => apply((s) => ({ ...s, answers: items })),
       replaceAll: (next) => setState(next),
     }),
-    [state, apply, saved],
+    [state, apply, saved, ai, setAi],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

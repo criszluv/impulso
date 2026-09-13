@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../state/context';
 import type { AppState } from '../types';
 import { initialState } from '../lib/defaults';
@@ -9,8 +9,10 @@ import type { ParsedCv } from '../lib/import/parseCv';
 import { parseLinkedInCsvs } from '../lib/import/linkedin';
 import { SECTION_LABELS, applyParsed, countOf } from '../lib/import/apply';
 import type { ImportMode, SectionKey } from '../lib/import/apply';
+import { hasAiKey } from '../lib/ai/settings';
+import { AiError } from '../lib/ai/errors';
 import { formatRange } from '../lib/utils';
-import { Badge, Button, Card, Empty, Select, TextArea } from '../components/ui';
+import { Badge, Button, Card, Empty, Select, TextArea, Toggle } from '../components/ui';
 
 type Source = 'archivo' | 'texto' | 'linkedin' | 'copia';
 
@@ -24,7 +26,7 @@ const SOURCES: Array<{ id: Source; title: string; detail: string; icon: string }
   {
     id: 'linkedin',
     title: 'Mi LinkedIn',
-    detail: 'Con la copia de datos que entrega LinkedIn, o pegando el texto de tu perfil.',
+    detail: 'Con la copia de datos que entrega LinkedIn, el PDF de tu perfil, o pegando el texto.',
     icon: 'in',
   },
   {
@@ -52,10 +54,11 @@ const ALL_SECTIONS: SectionKey[] = [
 ];
 
 export function ImportPage() {
-  const { state, apply, replaceAll } = useApp();
+  const { state, apply, replaceAll, ai } = useApp();
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const aiReady = hasAiKey(ai);
   const [source, setSource] = useState<Source | null>(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -64,7 +67,9 @@ export function ImportPage() {
   const [mode, setMode] = useState<ImportMode>('reemplazar');
   const [include, setInclude] = useState<Set<SectionKey>>(new Set(ALL_SECTIONS));
   const [dragging, setDragging] = useState(false);
+  const [useAi, setUseAi] = useState(true);
 
+  const withAi = aiReady && useAi;
   const hasProfile = Boolean(state.profile.personal.fullName || state.profile.experience.length);
 
   const reset = () => {
@@ -72,6 +77,26 @@ export function ImportPage() {
     setError('');
     setPasted('');
     setBusy('');
+  };
+
+  /** Punto único de lectura: decide entre el modelo y el lector local. */
+  const readText = async (text: string) => {
+    if (!withAi) {
+      setParsed(parseCvText(text));
+      return;
+    }
+    setBusy('Leyendo con IA… puede tardar hasta un minuto.');
+    try {
+      // El SDK y el esquema pesan; se cargan solo cuando la IA se usa de verdad.
+      const { extractCvWithAi } = await import('../lib/ai/extract');
+      setParsed(await extractCvWithAi(text, ai));
+    } catch (e) {
+      const detail = e instanceof AiError ? e.message : 'Falló la lectura con IA.';
+      setError(`${detail} Se usó el lector sin IA como respaldo.`);
+      setParsed(parseCvText(text));
+    } finally {
+      setBusy('');
+    }
   };
 
   const handleFile = async (file: File) => {
@@ -91,6 +116,7 @@ export function ImportPage() {
         setBusy('Abriendo el ZIP de LinkedIn…');
         const csvs = await zipToCsvMap(file);
         setParsed(parseLinkedInCsvs(csvs));
+        setBusy('');
         return;
       }
 
@@ -98,28 +124,29 @@ export function ImportPage() {
         setBusy('Leyendo el CSV…');
         const base = file.name.toLowerCase();
         setParsed(parseLinkedInCsvs({ [base]: await file.text() }));
+        setBusy('');
         return;
       }
 
-      setBusy(kind === 'pdf' ? 'Leyendo el PDF…' : 'Leyendo el documento…');
+      setBusy(kind === 'pdf' ? 'Extrayendo el texto del PDF…' : 'Leyendo el documento…');
       const text =
         kind === 'pdf' ? await pdfToText(file) : kind === 'docx' ? await docxToText(file) : await file.text();
 
       if (text.replace(/\s/g, '').length < 60) {
+        setBusy('');
         setError(
           'Del archivo salió muy poco texto. Si tu PDF es un escaneo o una imagen, no se puede leer: copia el contenido a mano y usa «Pegar texto».',
         );
         return;
       }
-      setParsed(parseCvText(text));
+      await readText(text);
     } catch (e) {
+      setBusy('');
       setError(
         e instanceof Error && e.message === 'formato'
           ? 'Ese .json no es una copia de Impulso.'
           : 'No pude leer el archivo. Prueba con «Pegar texto», que funciona siempre.',
       );
-    } finally {
-      setBusy('');
     }
   };
 
@@ -137,6 +164,24 @@ export function ImportPage() {
       return next;
     });
   };
+
+  const readButtons = (
+    <div className="row" style={{ marginTop: 12 }}>
+      <Button
+        variant="primary"
+        disabled={pasted.trim().length < 60 || Boolean(busy)}
+        onClick={() => void readText(pasted)}
+      >
+        {busy ? 'Leyendo…' : withAi ? '✦ Leer con IA' : 'Leer el texto'}
+      </Button>
+      {withAi && (
+        <Button disabled={pasted.trim().length < 60 || Boolean(busy)} onClick={() => setParsed(parseCvText(pasted))}>
+          Leer sin IA
+        </Button>
+      )}
+      <span className="faint">Se muestra lo detectado antes de guardar nada.</span>
+    </div>
+  );
 
   // ---------- Paso 3: revisión ----------
   if (parsed) {
@@ -161,6 +206,15 @@ export function ImportPage() {
           </div>
         </div>
 
+        {error && (
+          <div className="issue issue-warn" style={{ marginBottom: 12 }}>
+            <span className="issue-icon">!</span>
+            <div>
+              <strong>{error}</strong>
+            </div>
+          </div>
+        )}
+
         {parsed.notes.map((note) => (
           <div className="issue issue-tip" key={note} style={{ marginBottom: 12 }}>
             <span className="issue-icon">i</span>
@@ -180,13 +234,38 @@ export function ImportPage() {
           </Card>
         ) : (
           <>
+            {!aiReady && (
+              <div className="next-step">
+                <span className="num" aria-hidden="true">
+                  ✦
+                </span>
+                <div style={{ flex: 1, minWidth: 220 }}>
+                  <h3>¿Quedaron datos en campos equivocados?</h3>
+                  <p>
+                    El lector incluido adivina la estructura con reglas, y con CV de columnas o
+                    encabezados poco comunes se equivoca. Con una clave de la API de Claude, el mismo
+                    texto lo interpreta un modelo y esto mejora bastante.
+                  </p>
+                </div>
+                <Link to="/ajustes">
+                  <Button variant="primary">Configurar IA</Button>
+                </Link>
+              </div>
+            )}
+
             <Card title="Qué incluir" subtitle="Desmarca lo que no quieras traer.">
               <div className="stack" style={{ gap: 8 }}>
                 {totals.map(({ key, count }) => (
                   <label
                     key={key}
                     className="stat"
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: count ? 'pointer' : 'default', opacity: count ? 1 : 0.45 }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      cursor: count ? 'pointer' : 'default',
+                      opacity: count ? 1 : 0.45,
+                    }}
                   >
                     <input
                       type="checkbox"
@@ -196,7 +275,9 @@ export function ImportPage() {
                     />
                     <b style={{ fontSize: 14, flex: 1 }}>{SECTION_LABELS[key]}</b>
                     <Badge tone={count ? 'good' : 'neutral'}>
-                      {count ? `${count} ${key === 'personal' ? 'campos' : count === 1 ? 'elemento' : 'elementos'}` : 'nada'}
+                      {count
+                        ? `${count} ${key === 'personal' ? 'campos' : count === 1 ? 'elemento' : 'elementos'}`
+                        : 'nada'}
                     </Badge>
                   </label>
                 ))}
@@ -344,10 +425,43 @@ export function ImportPage() {
           <h1>Trae lo que ya tienes</h1>
           <p>
             Escribir un perfil desde cero es lento. Carga tu CV o tu LinkedIn, y corrige lo que haga
-            falta. Todo se procesa en tu navegador: ningún archivo se sube a ninguna parte.
+            falta. El archivo se abre en tu navegador y no se sube a ninguna parte.
           </p>
         </div>
       </div>
+
+      {aiReady ? (
+        <div className="next-step">
+          <span className="num" aria-hidden="true">
+            ✦
+          </span>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <h3>Lectura con IA activada</h3>
+            <p>
+              El texto se manda a Claude para interpretarlo, que es bastante más preciso que las
+              reglas locales. Solo viaja el documento que cargues acá, nada más de tu perfil.
+            </p>
+          </div>
+          <Toggle label="Usar IA" checked={useAi} onChange={setUseAi} />
+        </div>
+      ) : (
+        <div className="next-step">
+          <span className="num" aria-hidden="true">
+            ✦
+          </span>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <h3>¿La lectura te deja datos en campos equivocados?</h3>
+            <p>
+              El lector incluido funciona sin conexión y sin costo, pero adivina la estructura con
+              reglas y se confunde con CV de columnas o encabezados poco comunes. Con una clave de la
+              API de Claude, el mismo texto lo interpreta un modelo.
+            </p>
+          </div>
+          <Link to="/ajustes">
+            <Button>Configurar IA</Button>
+          </Link>
+        </div>
+      )}
 
       <div className="grid">
         {SOURCES.map((s) => (
@@ -440,7 +554,7 @@ export function ImportPage() {
         <>
           <Card
             title="Opción A: la copia de datos de LinkedIn"
-            subtitle="Es la más fiel, porque son tus datos tal como los tiene LinkedIn."
+            subtitle="La más fiel, porque son tus datos tal como los tiene LinkedIn, sin interpretar nada."
           >
             <ol className="steps">
               <li>
@@ -486,8 +600,21 @@ export function ImportPage() {
           </Card>
 
           <Card
-            title="Opción B: copiar y pegar el perfil"
-            subtitle="Más rápido, aunque reconoce menos. Sirve igual para partir."
+            title="Opción B: el PDF de tu perfil"
+            subtitle="Rápido y sin esperar el correo de LinkedIn."
+          >
+            <ol className="steps">
+              <li>Abre tu perfil de LinkedIn en el computador.</li>
+              <li>
+                Bajo tu foto, toca <b>«Más» → «Guardar en PDF»</b>.
+              </li>
+              <li>Sube ese PDF en la primera opción de esta página, «Mi CV en PDF o Word».</li>
+            </ol>
+          </Card>
+
+          <Card
+            title="Opción C: copiar y pegar el perfil"
+            subtitle="Lo más rápido de todo, aunque reconoce menos si lees sin IA."
           >
             <ol className="steps">
               <li>Abre tu perfil de LinkedIn en el computador.</li>
@@ -504,11 +631,7 @@ export function ImportPage() {
               onChange={(e) => setPasted(e.target.value)}
               placeholder="Pega aquí…"
             />
-            <div className="row" style={{ marginTop: 12 }}>
-              <Button variant="primary" disabled={pasted.trim().length < 60} onClick={() => setParsed(parseCvText(pasted))}>
-                Leer el texto
-              </Button>
-            </div>
+            {readButtons}
           </Card>
         </>
       )}
@@ -516,7 +639,7 @@ export function ImportPage() {
       {source === 'texto' && (
         <Card
           title="Pega tu CV"
-          subtitle="Abre tu currículum, selecciona todo, copia y pega. Si las secciones se llaman Experiencia, Educación y Habilidades, el reconocimiento mejora bastante."
+          subtitle="Abre tu currículum, selecciona todo, copia y pega. Si lees sin IA, ayuda que las secciones se llamen Experiencia, Educación y Habilidades."
         >
           <TextArea
             label="Texto del CV"
@@ -525,12 +648,7 @@ export function ImportPage() {
             onChange={(e) => setPasted(e.target.value)}
             placeholder={'María Pérez\nAnalista de Datos\nmaria@correo.cl · +56 9 1234 5678 · Osorno\n\nEXPERIENCIA\nAnalista de Datos — Retail Sur · mar 2021 - Actualidad\n• Automaticé el reporte semanal…'}
           />
-          <div className="row" style={{ marginTop: 12 }}>
-            <Button variant="primary" disabled={pasted.trim().length < 60} onClick={() => setParsed(parseCvText(pasted))}>
-              Leer el texto
-            </Button>
-            <span className="faint">Se muestra lo detectado antes de guardar nada.</span>
-          </div>
+          {readButtons}
         </Card>
       )}
 

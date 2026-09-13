@@ -5,6 +5,8 @@ import type { Application, ApplicationStatus } from '../types';
 import { daysSince, formatDate, uid } from '../lib/utils';
 import { matchJob } from '../lib/analysis';
 import { parseJobPosting, sourceFromUrl } from '../lib/import/parseJob';
+import { hasAiKey } from '../lib/ai/settings';
+import { AiError } from '../lib/ai/errors';
 import {
   Button,
   Card,
@@ -48,7 +50,7 @@ function newApplication(patch: Partial<Application> = {}): Application {
 }
 
 export function Applications() {
-  const { state, setApplications } = useApp();
+  const { state, setApplications, ai } = useApp();
   const { applications, profile } = state;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<ApplicationStatus | null>(null);
@@ -57,6 +59,8 @@ export function Applications() {
   const [jobUrl, setJobUrl] = useState('');
   const [jobText, setJobText] = useState('');
   const [readNotes, setReadNotes] = useState<string[]>([]);
+  const [reading, setReading] = useState(false);
+  const aiReady = hasAiKey(ai);
 
   const selected = applications.find((a) => a.id === selectedId) ?? null;
 
@@ -90,21 +94,40 @@ export function Applications() {
     setAdding(false);
   };
 
-  const createFromPosting = () => {
-    const parsedJob = parseJobPosting(jobText, jobUrl);
+  const createFromPosting = async (withAi: boolean) => {
+    setReading(true);
+    let fields = parseJobPosting(jobText, jobUrl);
+    let contact = '';
+
+    if (withAi && jobText.trim()) {
+      try {
+        const { extractJobWithAi } = await import('../lib/ai/extract');
+        const read = await extractJobWithAi(jobText, jobUrl, ai);
+        fields = read;
+        contact = read.contact;
+      } catch (e) {
+        fields.notes = [
+          e instanceof AiError ? `${e.message} Se usó el lector sin IA.` : 'Falló la lectura con IA.',
+          ...fields.notes,
+        ];
+      }
+    }
+
     const a = newApplication({
-      role: parsedJob.role,
-      company: parsedJob.company,
-      location: parsedJob.location,
-      salary: parsedJob.salary,
-      source: parsedJob.source || sourceFromUrl(jobUrl),
+      role: fields.role,
+      company: fields.company,
+      location: fields.location,
+      salary: fields.salary,
+      contact,
+      source: fields.source || sourceFromUrl(jobUrl),
       url: jobUrl.trim(),
       jobDescription: jobText.trim(),
     });
     setApplications([a, ...applications]);
     setSelectedId(a.id);
-    setReadNotes(parsedJob.notes);
+    setReadNotes(fields.notes);
     setAdding(false);
+    setReading(false);
     setJobUrl('');
     setJobText('');
   };
@@ -180,9 +203,18 @@ export function Applications() {
           </div>
 
           <div className="row" style={{ marginTop: 14 }}>
-            <Button variant="primary" disabled={!jobText.trim() && !jobUrl.trim()} onClick={createFromPosting}>
-              Leer y crear postulación
+            <Button
+              variant="primary"
+              disabled={(!jobText.trim() && !jobUrl.trim()) || reading}
+              onClick={() => void createFromPosting(aiReady)}
+            >
+              {reading ? 'Leyendo…' : aiReady ? '✦ Leer con IA y crear' : 'Leer y crear postulación'}
             </Button>
+            {aiReady && (
+              <Button disabled={(!jobText.trim() && !jobUrl.trim()) || reading} onClick={() => void createFromPosting(false)}>
+                Leer sin IA
+              </Button>
+            )}
           </div>
         </Card>
       )}
