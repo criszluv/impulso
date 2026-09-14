@@ -64,7 +64,7 @@ export function checkLetter(body: string, candidateName: string): LetterCheck {
 /** Refuerzo para el segundo intento, cuando el primero salió en modo chat. */
 export const LETTER_RETRY_NOTE = `IMPORTANTE: tu respuesta anterior no sirvió porque respondiste como asistente en vez de escribir el documento.
 
-En «body» va EXCLUSIVAMENTE el texto de la carta, tal como se enviaría a la empresa:
+En el campo «text» de cada elemento de «paragraphs» va EXCLUSIVAMENTE el texto de la carta, tal como se enviaría a la empresa:
 - Empieza con el saludo a la empresa o a la persona que contrata. NUNCA saludes a quien firma la carta.
 - No hagas preguntas. No ofrezcas ayuda. No des instrucciones de cómo postular. No comentes el perfil.
 - Termina con la firma: el nombre de quien postula.`;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Mail, Download, Sparkles } from 'lucide-react';
 import { jsPDF } from 'jspdf';
@@ -18,6 +18,13 @@ export function Letters() {
     [busy, setBusy] = useState(false),
     [previous, setPrevious] = useState<{ id: string; body: string } | null>(null);
   const letter = state.letters.find((l) => l.id === id);
+  const focusResult = useRef(false);
+  useEffect(() => {
+    if (!busy && focusResult.current) {
+      document.getElementById('letter-body')?.focus();
+      focusResult.current = false;
+    }
+  }, [busy, letter?.body]);
   const patch = (v: Partial<CoverLetter>) =>
     apply((s) => ({
       ...s,
@@ -89,6 +96,7 @@ export function Letters() {
           ? result.gaps.join(' ')
           : 'Carta preparada con IA. Revisa que todo sea cierto antes de enviarla.',
       );
+      focusResult.current = true;
     } catch (e) {
       setMessage(
         e instanceof Error ? e.message : 'La IA no respondió. Puedes usar el borrador básico.',
@@ -150,24 +158,6 @@ export function Letters() {
         </>
       ) : (
         <fieldset disabled={busy} className="plain-fieldset">
-          <AiAssist
-            title="Escribe una carta con IA"
-            description="Usa tu perfil y, si lo hay, el aviso de trabajo. Puedes elegir el tono y contar qué te interesa para darle tu voz."
-          >
-            {letter.body ? (
-              <ConfirmButton
-                confirmLabel="Sí, reemplazar mi texto con IA"
-                onConfirm={() => void generate()}
-              >
-                Crear otra versión con IA
-              </ConfirmButton>
-            ) : (
-              <Button variant="primary" onClick={() => void generate()}>
-                <Sparkles size={18} />
-                Redactar mi carta con IA
-              </Button>
-            )}
-          </AiAssist>
           <div className="split">
             <section className="form-sheet">
               <h2>¿A quién le escribes?</h2>
@@ -205,6 +195,7 @@ export function Letters() {
                 label="¿Por qué te interesa? (opcional)"
                 value={letter.motivation}
                 placeholder="Algo que te atraiga del trabajo o que quieras aportar."
+                hint="Es tu interés personal. No se usará para atribuir actividades o valores a la empresa."
                 onChange={(e) => patch({ motivation: e.target.value })}
               />
               <Select
@@ -227,7 +218,7 @@ export function Letters() {
                     applicationId: a?.id || null,
                     role: a?.role || letter.role,
                     company: a?.company || letter.company,
-                    jobDescription: a?.jobDescription || '',
+                    jobDescription: a ? a.jobDescription : letter.jobDescription,
                   });
                 }}
               >
@@ -253,11 +244,41 @@ export function Letters() {
                 <TextArea
                   label="Descripción del trabajo"
                   rows={7}
+                  hint="Pega las funciones y requisitos. La IA los usará como guía principal para adaptar la carta, sin atribuirte experiencia que no esté en tu CV."
                   value={letter.jobDescription}
                   onChange={(e) => patch({ jobDescription: e.target.value })}
                 />
               </details>
 
+              <AiAssist
+                title="Escribe una carta con IA"
+                description="Con los datos de arriba, la IA relaciona las tareas y requisitos del aviso con tu experiencia real. Tu motivación se incluye cuando encaja con ese trabajo."
+              >
+                {letter.body ? (
+                  <ConfirmButton
+                    confirmLabel="Sí, reemplazar mi texto con IA"
+                    onConfirm={() => void generate()}
+                  >
+                    Crear otra versión con IA
+                  </ConfirmButton>
+                ) : (
+                  <Button variant="primary" onClick={() => void generate()}>
+                    <Sparkles size={18} />
+                    Redactar mi carta con IA
+                  </Button>
+                )}
+              </AiAssist>
+              {busy && (
+                <p role="status" className="notice">
+                  La IA está leyendo tus datos y redactando. Con un modelo local puede tardar un
+                  poco.
+                </p>
+              )}
+              {message && (
+                <p role="status" className="notice">
+                  {message}
+                </p>
+              )}
               {letter.body ? (
                 <ConfirmButton confirmLabel="Sí, reemplazar el borrador" onConfirm={draft}>
                   Crear otro borrador con mis datos
@@ -266,7 +287,8 @@ export function Letters() {
                 <Button onClick={draft}>Preparar un borrador</Button>
               )}
               <p className="field-hint">
-                El borrador básico funciona sin IA y usa lo que escribiste en tu perfil.
+                El borrador básico funciona sin IA: usa tu perfil y motivación, pero no analiza el
+                aviso.
               </p>
               <ConfirmButton
                 confirmLabel="Sí, eliminar esta carta"
@@ -282,6 +304,7 @@ export function Letters() {
               <span className="eyebrow">Tu borrador</span>
               <h2>Hazlo tuyo.</h2>
               <TextArea
+                id="letter-body"
                 label="Carta de presentación"
                 rows={20}
                 value={letter.body}
@@ -313,16 +336,6 @@ export function Letters() {
             </section>
           </div>
         </fieldset>
-      )}
-      {busy && (
-        <p role="status" className="notice">
-          La IA está redactando. Con un modelo local puede tardar un poco.
-        </p>
-      )}
-      {message && (
-        <p role="status" className="notice">
-          {message}
-        </p>
       )}
     </>
   );

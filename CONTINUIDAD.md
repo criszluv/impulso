@@ -1,4 +1,50 @@
-# Continuidad de Impulso · 13 de septiembre de 2026
+# Continuidad de Impulso · 14 de septiembre de 2026 (UTC)
+
+## Última corrección completada: cartas con IA
+
+Se retomó la pausa solicitada por el usuario y se terminó la corrección. Conservar el diseño aprobado y el funcionamiento local. No queda implementación a medias de esta solicitud.
+
+### Qué cambió
+
+- El panel y botón para redactar con IA están después de los datos y la descripción del empleo. El resultado recibe el foco al terminar y el texto anterior se puede recuperar.
+- La descripción sí llegaba al modelo antes del cambio. Las instrucciones permitían tratar la motivación como información de la empresa y favorecían un párrafo genérico sobre ella. Ahora el aviso guía los temas, el perfil acredita los hechos personales y la motivación solo se incorpora si encaja.
+- La IA recibe fuentes separadas e identificadas: J para el aviso y P para el perfil. Devuelve párrafos con referencias a esas fuentes; la app forma la carta a partir de sus textos. Se comprueban identificadores existentes y al menos un vínculo al aviso cuando lo hay. No se muestran identificadores dentro de la carta.
+- Si la respuesta carece de estructura o fuentes válidas, reintenta una vez. Si sigue fallando, mantiene el texto anterior. La comprobación verifica la estructura y las fuentes existentes; NO garantiza que todas las afirmaciones sean verdaderas ni que cada referencia sea semánticamente correcta. La revisión humana sigue siendo necesaria.
+- Se pide no convertir requisitos del aviso en conocimientos adquiridos, no inferir actividades del hotel a partir de nombres como Velada/Ibai y no atribuir entretenimiento al hotel por una motivación personal. Se pide informar de discrepancias entre formulario y aviso, aunque un modelo puede omitirlas.
+- Los tonos tienen un máximo de palabras, sin una extensión mínima que fuerce relleno. Se limpian entidades HTML del aviso y se conservan detalle de estudios y estado en curso. Si el modelo omite teléfono/correo del perfil, la app los añade al cierre.
+- Desvincular un aviso guardado conserva la descripción de la carta. El borrador básico aclara que no analiza el aviso.
+
+### Verificación completada
+
+- Suite normal completa: 28 pruebas pasaron; la prueba optativa de IA real se omite en esa ejecución. Total declarado: 29.
+- Prueba real ejecutada aparte con Ollama 0.33.2 y qwen3.5:9b, perfil ficticio de cocina y un aviso representativo del reportado. La versión final pasó en aproximadamente 10 segundos: preparación de alimentos, orden e higiene, sin entretenimiento ni afirmar APPCC/Office o experiencia previa en hoteles, y contacto conservado. Se inspeccionó la respuesta real.
+- Una versión intermedia con citas literales duplicadas falló: el modelo confundía citas del CV con las del aviso y añadía requisitos como habilidades propias. Se sustituyó por párrafos con identificadores de fuentes y se acortaron las instrucciones. No restaurar el esquema intermedio jobReferences/jobQuote/letterQuote.
+- El modelo estaba cargado con contexto 4096; la respuesta final informó 1637 tokens de entrada y 345 de salida. En este caso no se acreditó un problema de capacidad de contexto; no se cambió la configuración global de Ollama. Los avisos/CV mucho más largos aún requieren pruebas específicas.
+- Compilación correcta y revisión estática limpia. Pruebas de pantalla móvil/escritorio, ausencia de desbordamiento y axe en los recorridos cubiertos. Las pruebas usan contextos aislados y no alteran el perfil del navegador habitual.
+- El test real ahora espera a que termine la generación y conserva una respuesta de diagnóstico en test-results cuando se ejecuta. Esa carpeta está excluida de Git y las siguientes ejecuciones pueden reemplazarla.
+
+### Archivos principales
+
+- src/pages/Letters.tsx: posición del botón, estado, foco y conservación de descripción.
+- src/lib/ai/extract.ts: instrucciones, fuentes separadas, estructura de párrafos y contacto.
+- src/lib/ai/letterContext.ts: fuentes, párrafos, validación y reintento.
+- src/lib/ai/letterCheck.ts: rechazo de respuestas de chat y refuerzo compatible con paragraphs.
+- tests/letters-context.spec.ts: casos simulados de regresión y prueba real optativa.
+- tests/ai-jobs.spec.ts: respuestas simuladas actualizadas; el cuadro de importación solo se abre si está cerrado.
+
+### Retomar una evaluación del modelo
+
+Proyecto: C:/Users/crist/OneDrive/Documentos/impulso (no web dle).
+Rama: codex/impulso-simple. Repositorio: https://github.com/criszluv/impulso
+App: http://localhost:5180/ o Abrir Impulso.cmd.
+
+Pruebas normales: npm test. Prueba real: activar IMPULSO_TEST_LOCAL_AI=1 solo para esa ejecución y ejecutar npm test -- tests/letters-context.spec.ts -g 'modelo local real'. Requiere el servidor Ollama activo y qwen3.5:9b instalado; el test no instala modelos ni usa servicios de pago.
+
+Futuro, fuera de esta corrección: ampliar evaluación a más oficios/modelos, avisos y CV largos, y medir relevancia y veracidad con casos revisados por personas. No considerar una prueba real como garantía para todos los modelos. El resto del backlog (OCR, catálogo presencial, API/créditos y usabilidad) sigue más abajo.
+
+---
+
+## Historial de ampliaciones anteriores
 
 ## Última ampliación completada · guía y comparación
 

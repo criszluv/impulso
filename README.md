@@ -22,7 +22,7 @@ Usa siempre el mismo origen y navegador. localhost y 127.0.0.1 tienen almacenami
 - **Buscar trabajo:** selector de 25 países y ciudad libre con sugerencias. Ofertas remotas de Remotive y Jobicy dentro de la app, con descripción, fuente y guardado sin duplicados. La ciudad se usa en búsquedas externas de Google, LinkedIn, Indeed, InfoJobs (España) y Chiletrabajos (Chile). No hay servicio público/BNE.
 - **Mis postulaciones:** comparación local del aviso con el CV, con fragmentos del aviso, evidencia de las secciones visibles y sugerencias. También conserva registro del aviso, pasos de envío, confirmación explícita, notas y recordatorios descargables.
 - **Ayuda y mis datos:** copias descargables, validación y revisión antes de restaurar, versión anterior y borrado local.
-- **IA y cartas visibles:** accesos permanentes a activar IA, leer un CV y crear cartas de presentación. Las cartas funcionan sin empleo guardado e incluyen tono y motivación. Una oferta integrada pasa su descripción directamente a la carta.
+- **IA y cartas visibles:** accesos permanentes a activar IA, leer un CV y crear cartas de presentación. Las cartas funcionan sin empleo guardado e incluyen tono y motivación. Una oferta integrada pasa su descripción directamente a la carta. El botón de IA aparece después de los datos. El aviso guía los temas y el perfil respalda los hechos; la motivación personal no describe las actividades de la empresa.
 - **Herramientas complementarias:** importación PDF/Word/texto/ZIP de LinkedIn, edición completa del perfil, borradores de LinkedIn y preparación de entrevistas.
 
 ## Documentos y datos
@@ -102,9 +102,11 @@ npx playwright install chromium
 npm test
 ```
 
-Las 25 pruebas usan contextos aislados del navegador y datos ficticios, sin modificar el perfil del usuario. Cubren el recorrido inicial, PDF legible y multipágina, persistencia, errores de guardado, migración, importación, recuperación y deshacer, envío confirmado, calendario, cartas y entrevistas, navegación móvil y comprobaciones axe. Las seis pruebas añadidas cubren la guía completa en España con varias experiencias y estudios, PDF con sede y estado en curso, validación de filas cerradas, foco y deshacer, migración de países, separación entre residencia y búsqueda, evidencia de comparación, secciones ocultas y estados sin perfil/aviso.
+Las 28 pruebas normales usan contextos aislados del navegador y datos ficticios, sin modificar el perfil del usuario. Cubren el recorrido inicial, PDF legible y multipágina, persistencia, errores de guardado, migración, importación, recuperación y deshacer, envío confirmado, calendario, cartas y entrevistas, navegación móvil y comprobaciones axe. Las seis pruebas añadidas cubren la guía completa en España con varias experiencias y estudios, PDF con sede y estado en curso, validación de filas cerradas, foco y deshacer, migración de países, separación entre residencia y búsqueda, evidencia de comparación, secciones ocultas y estados sin perfil/aviso.
 
-Los servicios de IA y empleo se simulan en las pruebas para hacerlas reproducibles y no consumir APIs. Se comprobó por separado la llegada real de ofertas de ambas fuentes; no había servidor de IA local activo durante esta revisión.
+Los servicios de IA y empleo se simulan en las pruebas normales para hacerlas reproducibles y no consumir APIs. Se comprobó por separado la llegada real de ofertas de ambas fuentes. La prueba número 29 es optativa: con IMPULSO_TEST_LOCAL_AI=1 ejecuta el caso de cocina con qwen3.5:9b en Ollama local. Pasó en esta revisión con datos ficticios y sin APIs de pago; no equivale a validar todos los modelos o documentos.
+
+La carta con IA se devuelve como párrafos con identificadores de sus fuentes (aviso/perfil). La app comprueba que existen y que se hace referencia al aviso cuando se proporcionó. Un fallo provoca un reintento y, si persiste, conserva la carta anterior. Esta validación no certifica la veracidad o relevancia semántica de cada afirmación: el usuario debe revisar el texto. El teléfono/correo del perfil se añaden al cierre si el modelo los omite. Los borradores básicos siguen disponibles sin IA.
 
 Los resultados y capturas se guardan en test-results, excluido de Git.
 

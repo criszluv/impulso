@@ -156,7 +156,8 @@ test('IA visible, lectura optativa, correcciones antes de guardar y recuperació
   await expect(page.getByLabel('Usar IA para leer mi currículum')).toBeVisible();
   await expect(page.getByLabel('Usar IA para leer mi currículum')).not.toBeChecked();
   await page.getByLabel('Usar IA para leer mi currículum').check();
-  await page.getByText('Prefiero copiar y pegar el texto', { exact: true }).click();
+  if (!(await page.getByLabel('El contenido de mi currículum').isVisible()))
+    await page.getByText('Prefiero copiar y pegar el texto', { exact: true }).click();
   await page
     .getByLabel('El contenido de mi currículum')
     .fill('Ana Pérez, cajera de Mercado, atención de público. ana@example.com');
@@ -179,7 +180,8 @@ test('IA visible, lectura optativa, correcciones antes de guardar y recuperació
     r.fulfill({ status: 502, json: { error: { message: 'Servidor apagado' } } }),
   );
   await page.getByLabel('Usar IA para leer mi currículum').check();
-  await page.getByText('Prefiero copiar y pegar el texto', { exact: true }).click();
+  if (!(await page.getByLabel('El contenido de mi currículum').isVisible()))
+    await page.getByText('Prefiero copiar y pegar el texto', { exact: true }).click();
   await page.getByLabel('El contenido de mi currículum').fill('Ana Pérez\nana@example.com\nCajera');
   await page.getByRole('button', { name: 'Leer este texto' }).click();
   await expect(page.getByRole('alert')).toContainText('Servidor apagado');
@@ -215,7 +217,10 @@ test('carta independiente con IA recibe perfil, motivación y aviso sin salir', 
           {
             message: {
               content: JSON.stringify({
-                body: 'Hola:\n\nMe interesa el puesto de soporte. Mi experiencia incluye atención de consultas y organización de tareas.\n\nMe atrae ayudar a las personas a resolver sus dudas y aprender del equipo.\n\nQuedo disponible para conversar sobre el trabajo.\n\nCamila Soto',
+                paragraphs:
+                  'Hola:\n\nMe interesa el puesto de soporte. Mi experiencia incluye atención de consultas y organización de tareas.\n\nMe atrae ayudar a las personas a resolver sus dudas y aprender del equipo.\n\nQuedo disponible para conversar sobre el trabajo.\n\nCamila Soto'
+                    .split('\n\n')
+                    .map((text, i) => ({ text, jobIds: i === 1 ? ['J1'] : [], profileIds: [] })),
                 gaps: [],
               }),
             },
